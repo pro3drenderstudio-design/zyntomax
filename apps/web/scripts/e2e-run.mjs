@@ -1,7 +1,7 @@
 import { SignJWT } from "jose";
 import { readFileSync } from "fs";
 
-const env = readFileSync(new URL("./.env", import.meta.url), "utf8");
+const env = readFileSync(new URL("../.env", import.meta.url), "utf8");
 const secret = env.match(/AUTH_SECRET="([^"]+)"/)[1];
 
 const adminId = process.env.ADMIN_ID;
