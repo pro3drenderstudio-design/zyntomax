@@ -1,0 +1,1011 @@
+// Zyntomax Platform — canonical data model.
+// Design rules:
+//  - Every operational record carries siteId (multi-site from day one).
+//  - Inventory and money are append-only ledgers; balances are computed, never stored.
+//  - Corrections are reversing entries, not edits.
+//  - Weigh events capture who/when/where/photo for evidence (manual scales).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────── Core ───────────────────────────────
+
+enum SiteKind {
+  FACTORY
+  COLLECTION_HUB
+}
+
+model Site {
+  id        String   @id @default(cuid())
+  name      String
+  kind      SiteKind @default(FACTORY)
+  address   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userRoles          UserRole[]
+  localities         Locality[]
+  vendors            Vendor[]
+  trips              Trip[]
+  purchaseBatches    PurchaseBatch[]
+  inventoryLocations InventoryLocation[]
+  jobs               Job[]
+  rateCards          RateCard[]
+  payrollRuns        PayrollRun[]
+  salesOrders        SalesOrder[]
+  expenses           Expense[]
+  budgets            Budget[]
+  targets            Target[]
+  settings           Setting[]
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  EXITED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  phone        String     @unique
+  email        String?    @unique
+  passwordHash String?
+  name         String
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  roles        UserRole[]
+  staffProfile StaffProfile?
+  auditLogs    AuditLog[]
+  notifications Notification[]
+}
+
+enum RoleName {
+  SUPER_ADMIN
+  OPERATIONS_MANAGER
+  FACTORY_SUPERVISOR
+  FINANCE_ADMIN
+  PURCHASING_MANAGER
+  HR_ADMIN
+  SALES_ADMIN
+  TEAM_LEAD
+  COLLECTION_AGENT
+  PRODUCTION_STAFF
+  AUDITOR
+}
+
+model UserRole {
+  id     String   @id @default(cuid())
+  userId String
+  role   RoleName
+  siteId String? // null = global grant
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site Site? @relation(fields: [siteId], references: [id])
+
+  @@unique([userId, role, siteId])
+}
+
+model StaffProfile {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  staffNo          String    @unique
+  photoUrl         String?
+  address          String?
+  hireDate         DateTime?
+  bankName         String?
+  bankAccountNo    String? // encrypted at application level
+  bankAccountName  String? // Paystack-verified name
+  bvnEncrypted     String? // application-level encrypted; display last-4 only
+  nextOfKinName    String?
+  nextOfKinPhone   String?
+  emergencyName    String?
+  emergencyPhone   String?
+  paystackRecipient String? // transfer recipient code
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id])
+  tripMemberships TripMember[]
+  ledTrips        Trip[]           @relation("TripLead")
+  jobAssignments  JobAssignment[]
+  payrollItems    PayrollItem[]
+  advances        SalaryAdvance[]
+  issuances       Issuance[]
+  staffLogs       StaffLog[]
+}
+
+model Setting {
+  id     String  @id @default(cuid())
+  key    String
+  value  Json
+  siteId String? // null = global default; site row overrides
+
+  site Site? @relation(fields: [siteId], references: [id])
+
+  @@unique([key, siteId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String // e.g. "trip.approve", "vendor.create"
+  entity     String
+  entityId   String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([actorId, createdAt])
+}
+
+enum NotificationChannel {
+  IN_APP
+  PUSH
+  SMS
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String?
+  vendorId  String?
+  channel   NotificationChannel
+  title     String
+  body      String
+  status    NotificationStatus  @default(PENDING)
+  createdAt DateTime            @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id])
+  vendor Vendor? @relation(fields: [vendorId], references: [id])
+
+  @@index([userId, status])
+}
+
+// ──────────────────────── Vendors & Collection ────────────────────────
+
+model Locality {
+  id        String   @id @default(cuid())
+  siteId    String
+  name      String
+  centerLat Float?
+  centerLng Float?
+  createdAt DateTime @default(now())
+
+  site    Site     @relation(fields: [siteId], references: [id])
+  vendors Vendor[]
+  trips   Trip[]
+
+  @@unique([siteId, name])
+}
+
+enum VendorStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+}
+
+model Vendor {
+  id              String       @id @default(cuid())
+  siteId          String
+  localityId      String?
+  name            String
+  phone           String       @unique
+  photoUrl        String?
+  address         String?
+  lat             Float?
+  lng             Float?
+  bankName        String?
+  bankAccountNo   String? // encrypted at application level
+  bankAccountName String? // Paystack-verified name
+  bankVerified    Boolean      @default(false)
+  bvnEncrypted    String?
+  paystackRecipient String?
+  status          VendorStatus @default(ACTIVE)
+  registeredById  String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  site           Site            @relation(fields: [siteId], references: [id])
+  locality       Locality?       @relation(fields: [localityId], references: [id])
+  pickupRequests PickupRequest[]
+  weighIns       CollectionWeighIn[]
+  payouts        Payout[]
+  rewardGrants   RewardGrant[]
+  notifications  Notification[]
+
+  @@index([siteId, localityId])
+}
+
+model RewardTier {
+  id          String  @id @default(cuid())
+  name        String
+  thresholdKg Decimal @db.Decimal(10, 2)
+  reward      String // e.g. "Foodstuff pack"
+  active      Boolean @default(true)
+
+  grants RewardGrant[]
+}
+
+model RewardGrant {
+  id           String   @id @default(cuid())
+  vendorId     String
+  tierId       String
+  fulfilledBy  String?
+  fulfilledAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  vendor Vendor     @relation(fields: [vendorId], references: [id])
+  tier   RewardTier @relation(fields: [tierId], references: [id])
+}
+
+enum PickupSource {
+  APP
+  SMS
+  AGENT
+}
+
+enum PickupStatus {
+  PENDING
+  SCHEDULED
+  COLLECTED
+  CANCELLED
+}
+
+model PickupRequest {
+  id          String       @id @default(cuid())
+  vendorId    String
+  estWeightKg Decimal      @db.Decimal(10, 2)
+  source      PickupSource @default(AGENT)
+  status      PickupStatus @default(PENDING)
+  tripId      String?
+  createdAt   DateTime     @default(now())
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+  trip   Trip?  @relation(fields: [tripId], references: [id])
+
+  @@index([status])
+}
+
+enum TripStatus {
+  PLANNED
+  IN_PROGRESS
+  RETURNED
+  RECONCILED
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+model Trip {
+  id         String     @id @default(cuid())
+  siteId     String
+  localityId String?
+  leadId     String
+  vehicle    String?
+  date       DateTime
+  status     TripStatus @default(PLANNED)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  site           Site                @relation(fields: [siteId], references: [id])
+  locality       Locality?           @relation(fields: [localityId], references: [id])
+  lead           StaffProfile        @relation("TripLead", fields: [leadId], references: [id])
+  members        TripMember[]
+  pickupRequests PickupRequest[]
+  weighIns       CollectionWeighIn[]
+  reconciliation TripReconciliation?
+  payoutBatch    PayoutBatch?
+  expenses       Expense[]
+
+  @@index([siteId, date])
+}
+
+model TripMember {
+  id      String @id @default(cuid())
+  tripId  String
+  staffId String
+
+  trip  Trip         @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  staff StaffProfile @relation(fields: [staffId], references: [id])
+
+  @@unique([tripId, staffId])
+}
+
+enum ConfirmationMethod {
+  SMS_OTP
+  SIGNATURE
+  NONE
+}
+
+model CollectionWeighIn {
+  id             String             @id @default(cuid())
+  clientUuid     String             @unique // idempotent offline sync
+  tripId         String
+  vendorId       String
+  materialTypeId String
+  weightKg       Decimal            @db.Decimal(10, 2)
+  ratePerKg      Decimal            @db.Decimal(12, 2) // snapshot from rate card
+  amount         Decimal            @db.Decimal(14, 2)
+  photoUrl       String?
+  lat            Float?
+  lng            Float?
+  confirmation   ConfirmationMethod @default(NONE)
+  signatureUrl   String?
+  agentId        String?
+  createdAt      DateTime           @default(now())
+
+  trip         Trip         @relation(fields: [tripId], references: [id])
+  vendor       Vendor       @relation(fields: [vendorId], references: [id])
+  materialType MaterialType @relation(fields: [materialTypeId], references: [id])
+
+  @@index([tripId])
+  @@index([vendorId])
+}
+
+model TripReconciliation {
+  id         String   @id @default(cuid())
+  tripId     String   @unique
+  approvedBy String?
+  approvedAt DateTime?
+  note       String?
+  createdAt  DateTime @default(now())
+
+  trip  Trip                     @relation(fields: [tripId], references: [id])
+  items TripReconciliationItem[]
+}
+
+model TripReconciliationItem {
+  id                 String  @id @default(cuid())
+  reconciliationId   String
+  materialTypeId     String
+  collectedKg        Decimal @db.Decimal(10, 2) // sum of field weigh-ins
+  remittedKg         Decimal @db.Decimal(10, 2) // scaled at factory
+  variancePct        Decimal @db.Decimal(6, 2)
+  toleranceSnapshot  Decimal @db.Decimal(6, 2)
+  varianceReason     String?
+
+  reconciliation TripReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  materialType   MaterialType       @relation(fields: [materialTypeId], references: [id])
+}
+
+enum PayoutBatchStatus {
+  AWAITING_FUNDS
+  READY
+  PROCESSING
+  COMPLETED
+  PARTIAL_FAILED
+}
+
+model PayoutBatch {
+  id          String            @id @default(cuid())
+  tripId      String            @unique
+  totalAmount Decimal           @db.Decimal(14, 2)
+  status      PayoutBatchStatus @default(READY)
+  releasedBy  String?
+  releasedAt  DateTime?
+  createdAt   DateTime          @default(now())
+
+  trip    Trip     @relation(fields: [tripId], references: [id])
+  payouts Payout[]
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  REVERSED
+}
+
+model Payout {
+  id             String       @id @default(cuid())
+  batchId        String
+  vendorId       String
+  amount         Decimal      @db.Decimal(14, 2)
+  idempotencyKey String       @unique
+  paystackRef    String?
+  status         PayoutStatus @default(PENDING)
+  failureReason  String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  batch  PayoutBatch @relation(fields: [batchId], references: [id])
+  vendor Vendor      @relation(fields: [vendorId], references: [id])
+
+  @@index([status])
+}
+
+// ───────────────────────────── Purchasing ─────────────────────────────
+
+enum SupplierKind {
+  INDEPENDENT_COLLECTOR
+  DUMPSITE
+  RESELLER
+}
+
+model Supplier {
+  id              String       @id @default(cuid())
+  name            String
+  kind            SupplierKind @default(INDEPENDENT_COLLECTOR)
+  phone           String?
+  bankName        String?
+  bankAccountNo   String?
+  bankAccountName String?
+  notes           String?
+  createdAt       DateTime     @default(now())
+
+  purchaseBatches PurchaseBatch[]
+}
+
+enum PurchasePaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
+model PurchaseBatch {
+  id                  String                @id @default(cuid())
+  siteId              String
+  supplierId          String
+  lotNo               String                @unique
+  purchasedById       String? // purchasing manager user id
+  fieldEstKg          Decimal?              @db.Decimal(10, 2)
+  scaledInAt          DateTime?
+  scaledInById        String?
+  paymentStatus       PurchasePaymentStatus @default(UNPAID)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  site             Site                @relation(fields: [siteId], references: [id])
+  supplier         Supplier            @relation(fields: [supplierId], references: [id])
+  items            PurchaseBatchItem[]
+  supplierPayments SupplierPayment[]
+  expenses         Expense[]
+
+  @@index([siteId, createdAt])
+}
+
+model PurchaseBatchItem {
+  id             String  @id @default(cuid())
+  batchId        String
+  materialTypeId String
+  weightKg       Decimal @db.Decimal(10, 2)
+  pricePerKg     Decimal @db.Decimal(12, 2)
+  amount         Decimal @db.Decimal(14, 2)
+  photoUrl       String?
+
+  batch        PurchaseBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  materialType MaterialType  @relation(fields: [materialTypeId], references: [id])
+}
+
+enum PaymentMethod {
+  TRANSFER
+  CASH
+  PAYSTACK
+}
+
+model SupplierPayment {
+  id        String        @id @default(cuid())
+  batchId   String
+  amount    Decimal       @db.Decimal(14, 2)
+  method    PaymentMethod @default(TRANSFER)
+  reference String?
+  isAdvance Boolean       @default(false)
+  paidById  String?
+  paidAt    DateTime      @default(now())
+
+  batch PurchaseBatch @relation(fields: [batchId], references: [id])
+}
+
+// ─────────────────── Materials, Inventory & Production ───────────────────
+
+model MaterialType {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  active Boolean @default(true)
+
+  routes              MaterialRoute[]
+  weighIns            CollectionWeighIn[]
+  purchaseItems       PurchaseBatchItem[]
+  reconciliationItems TripReconciliationItem[]
+  jobs                Job[]
+  movements           InventoryMovement[]
+  products            Product[]
+  rateCards           RateCard[]
+  vendorRates         VendorRate[]
+  targets             Target[]
+}
+
+model ProcessStage {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  active Boolean @default(true)
+
+  routes    MaterialRoute[]
+  jobs      Job[]
+  locations InventoryLocation[]
+  rateCards RateCard[]
+}
+
+model MaterialRoute {
+  id             String @id @default(cuid())
+  materialTypeId String
+  stageId        String
+  sequence       Int
+
+  materialType MaterialType @relation(fields: [materialTypeId], references: [id])
+  stage        ProcessStage @relation(fields: [stageId], references: [id])
+
+  @@unique([materialTypeId, sequence])
+  @@unique([materialTypeId, stageId])
+}
+
+model Product {
+  id             String  @id @default(cuid())
+  materialTypeId String
+  name           String  @unique // e.g. "PET Pellets"
+  form           String // pellets | flakes | bale | ingot
+  active         Boolean @default(true)
+
+  materialType MaterialType     @relation(fields: [materialTypeId], references: [id])
+  priceLists   PriceList[]
+  orderItems   SalesOrderItem[]
+  dispatchItems DispatchItem[]
+  movements    InventoryMovement[]
+}
+
+enum LocationKind {
+  INTAKE
+  STAGE_WIP
+  FINISHED_STORE
+  VEHICLE
+  CUSTOMER // terminal location for dispatches
+  VENDOR_GATE // origin location for collections
+  WASTE // terminal location for scaled-out waste
+}
+
+model InventoryLocation {
+  id      String       @id @default(cuid())
+  siteId  String
+  kind    LocationKind
+  stageId String?
+  name    String
+
+  site  Site          @relation(fields: [siteId], references: [id])
+  stage ProcessStage? @relation(fields: [stageId], references: [id])
+
+  movementsFrom InventoryMovement[] @relation("MoveFrom")
+  movementsTo   InventoryMovement[] @relation("MoveTo")
+
+  @@unique([siteId, kind, stageId, name])
+}
+
+enum MovementRefType {
+  TRIP
+  PURCHASE_BATCH
+  JOB
+  DISPATCH
+  TRANSFER
+  ADJUSTMENT
+}
+
+// Append-only. Corrections are reversing entries.
+model InventoryMovement {
+  id             String          @id @default(cuid())
+  fromLocationId String?
+  toLocationId   String?
+  materialTypeId String?
+  productId      String?
+  weightKg       Decimal         @db.Decimal(10, 2)
+  lotNo          String?
+  refType        MovementRefType
+  refId          String
+  byId           String?
+  note           String?
+  createdAt      DateTime        @default(now())
+
+  fromLocation InventoryLocation? @relation("MoveFrom", fields: [fromLocationId], references: [id])
+  toLocation   InventoryLocation? @relation("MoveTo", fields: [toLocationId], references: [id])
+  materialType MaterialType?      @relation(fields: [materialTypeId], references: [id])
+  product      Product?           @relation(fields: [productId], references: [id])
+
+  @@index([refType, refId])
+  @@index([lotNo])
+  @@index([toLocationId, createdAt])
+  @@index([fromLocationId, createdAt])
+}
+
+enum JobStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  FLAGGED // discrepancy beyond tolerance, awaiting supervisor resolution
+  RESOLVED
+}
+
+model Job {
+  id                String    @id @default(cuid())
+  siteId            String
+  stageId           String
+  materialTypeId    String
+  lotNo             String?
+  weightInKg        Decimal   @db.Decimal(10, 2)
+  weightOutKg       Decimal?  @db.Decimal(10, 2)
+  wasteKg           Decimal?  @db.Decimal(10, 2)
+  toleranceSnapshot Decimal   @db.Decimal(6, 2)
+  scaleInPhotoUrl   String?
+  scaleOutPhotoUrl  String?
+  status            JobStatus @default(ASSIGNED)
+  flagReason        String?
+  resolvedById      String?
+  payrollRunId      String? // set when the job's wages are locked into a payroll run
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+
+  site         Site            @relation(fields: [siteId], references: [id])
+  stage        ProcessStage    @relation(fields: [stageId], references: [id])
+  materialType MaterialType    @relation(fields: [materialTypeId], references: [id])
+  assignments  JobAssignment[]
+  payrollRun   PayrollRun?     @relation(fields: [payrollRunId], references: [id])
+
+  @@index([siteId, status])
+  @@index([lotNo])
+}
+
+model JobAssignment {
+  id      String @id @default(cuid())
+  jobId   String
+  staffId String
+  share   Decimal @default(1) @db.Decimal(6, 4) // fraction of the job's wage (1.0 = sole worker)
+
+  job   Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  staff StaffProfile @relation(fields: [staffId], references: [id])
+
+  @@unique([jobId, staffId])
+}
+
+// ───────────────────────────── HR & Wages ─────────────────────────────
+
+// Piece rate paid to production staff per good-output kg.
+model RateCard {
+  id             String   @id @default(cuid())
+  siteId         String? // null = global default
+  stageId        String
+  materialTypeId String
+  ratePerKg      Decimal  @db.Decimal(12, 2)
+  effectiveFrom  DateTime @default(now())
+
+  site         Site?        @relation(fields: [siteId], references: [id])
+  stage        ProcessStage @relation(fields: [stageId], references: [id])
+  materialType MaterialType @relation(fields: [materialTypeId], references: [id])
+
+  @@index([stageId, materialTypeId, effectiveFrom])
+}
+
+// Price paid to vendors per kg at collection.
+model VendorRate {
+  id             String   @id @default(cuid())
+  materialTypeId String
+  pricePerKg     Decimal  @db.Decimal(12, 2)
+  effectiveFrom  DateTime @default(now())
+
+  materialType MaterialType @relation(fields: [materialTypeId], references: [id])
+
+  @@index([materialTypeId, effectiveFrom])
+}
+
+enum PayrollStatus {
+  OPEN
+  CLOSED
+  PAID
+}
+
+model PayrollRun {
+  id        String        @id @default(cuid())
+  siteId    String
+  weekStart DateTime
+  weekEnd   DateTime
+  status    PayrollStatus @default(OPEN)
+  closedBy  String?
+  createdAt DateTime      @default(now())
+
+  site  Site          @relation(fields: [siteId], references: [id])
+  items PayrollItem[]
+  jobs  Job[]
+
+  @@unique([siteId, weekStart])
+}
+
+model PayrollItem {
+  id               String  @id @default(cuid())
+  runId            String
+  staffId          String
+  earnedAmount     Decimal @db.Decimal(14, 2)
+  advanceDeduction Decimal @default(0) @db.Decimal(14, 2)
+  netAmount        Decimal @db.Decimal(14, 2)
+  paymentRef       String?
+  paidAt           DateTime?
+
+  run   PayrollRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  staff StaffProfile @relation(fields: [staffId], references: [id])
+
+  @@unique([runId, staffId])
+}
+
+model SalaryAdvance {
+  id                 String   @id @default(cuid())
+  staffId            String
+  amount             Decimal  @db.Decimal(14, 2)
+  repaidAmount       Decimal  @default(0) @db.Decimal(14, 2)
+  weeklyDeductionCap Decimal? @db.Decimal(14, 2)
+  note               String?
+  grantedById        String?
+  createdAt          DateTime @default(now())
+
+  staff StaffProfile @relation(fields: [staffId], references: [id])
+}
+
+model Issuance {
+  id        String   @id @default(cuid())
+  staffId   String
+  item      String // e.g. "Safety boots"
+  quantity  Int      @default(1)
+  condition String? // new | used
+  signatureUrl String?
+  issuedById String?
+  issuedAt  DateTime @default(now())
+
+  staff StaffProfile @relation(fields: [staffId], references: [id])
+}
+
+enum StaffLogKind {
+  MEDICAL
+  REWARD
+  DISCIPLINARY
+}
+
+model StaffLog {
+  id          String       @id @default(cuid())
+  staffId     String
+  kind        StaffLogKind
+  description String
+  cost        Decimal?     @db.Decimal(14, 2)
+  loggedById  String?
+  createdAt   DateTime     @default(now())
+
+  staff StaffProfile @relation(fields: [staffId], references: [id])
+}
+
+// ─────────────────────────────── Sales ───────────────────────────────
+
+model Customer {
+  id              String   @id @default(cuid())
+  name            String
+  contactName     String?
+  phone           String?
+  email           String?
+  address         String?
+  creditTermsDays Int      @default(0) // 0 = payment on dispatch
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  priceLists PriceList[]
+  orders     SalesOrder[]
+}
+
+model PriceList {
+  id            String   @id @default(cuid())
+  productId     String
+  customerId    String? // null = list price; set = customer override
+  pricePerKg    Decimal  @db.Decimal(12, 2)
+  effectiveFrom DateTime @default(now())
+
+  product  Product   @relation(fields: [productId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([productId, effectiveFrom])
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED // reserves finished goods
+  PARTIALLY_DISPATCHED
+  DISPATCHED
+  CLOSED
+  CANCELLED
+}
+
+model SalesOrder {
+  id         String           @id @default(cuid())
+  siteId     String
+  customerId String
+  orderNo    String           @unique
+  status     SalesOrderStatus @default(DRAFT)
+  createdById String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  site       Site             @relation(fields: [siteId], references: [id])
+  customer   Customer         @relation(fields: [customerId], references: [id])
+  items      SalesOrderItem[]
+  dispatches Dispatch[]
+
+  @@index([siteId, status])
+}
+
+model SalesOrderItem {
+  id         String  @id @default(cuid())
+  orderId    String
+  productId  String
+  qtyKg      Decimal @db.Decimal(10, 2)
+  unitPrice  Decimal @db.Decimal(12, 2) // snapshot from price list
+
+  order   SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product    @relation(fields: [productId], references: [id])
+}
+
+enum DispatchStatus {
+  LOADING
+  DEPARTED
+  DELIVERED
+}
+
+model Dispatch {
+  id           String         @id @default(cuid())
+  orderId      String
+  waybillNo    String         @unique
+  vehicle      String?
+  driverName   String?
+  gatePhotoUrl String?
+  status       DispatchStatus @default(LOADING)
+  dispatchedAt DateTime       @default(now())
+
+  order   SalesOrder     @relation(fields: [orderId], references: [id])
+  items   DispatchItem[]
+  invoice Invoice?
+}
+
+model DispatchItem {
+  id         String  @id @default(cuid())
+  dispatchId String
+  productId  String
+  weightKg   Decimal @db.Decimal(10, 2) // scaled at gate; this is the invoiced weight
+  photoUrl   String?
+
+  dispatch Dispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id])
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+model Invoice {
+  id         String        @id @default(cuid())
+  dispatchId String        @unique
+  invoiceNo  String        @unique
+  amount     Decimal       @db.Decimal(14, 2)
+  dueDate    DateTime
+  status     InvoiceStatus @default(UNPAID)
+  createdAt  DateTime      @default(now())
+
+  dispatch Dispatch          @relation(fields: [dispatchId], references: [id])
+  payments CustomerPayment[]
+}
+
+model CustomerPayment {
+  id         String        @id @default(cuid())
+  invoiceId  String
+  amount     Decimal       @db.Decimal(14, 2)
+  method     PaymentMethod @default(TRANSFER)
+  reference  String?
+  receivedById String?
+  paidAt     DateTime      @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
+
+// ────────────────────────── Finance & Planning ──────────────────────────
+
+model ExpenseCategory {
+  id   String @id @default(cuid())
+  name String @unique
+
+  expenses Expense[]
+  budgets  Budget[]
+}
+
+model Expense {
+  id              String   @id @default(cuid())
+  siteId          String
+  categoryId      String
+  amount          Decimal  @db.Decimal(14, 2)
+  description     String?
+  receiptUrl      String?
+  purchaseBatchId String?
+  tripId          String?
+  incurredAt      DateTime @default(now())
+  recordedById    String?
+  createdAt       DateTime @default(now())
+
+  site          Site            @relation(fields: [siteId], references: [id])
+  category      ExpenseCategory @relation(fields: [categoryId], references: [id])
+  purchaseBatch PurchaseBatch?  @relation(fields: [purchaseBatchId], references: [id])
+  trip          Trip?           @relation(fields: [tripId], references: [id])
+
+  @@index([siteId, incurredAt])
+}
+
+enum WalletTxKind {
+  TOPUP
+  PAYOUT
+  FEE
+  REFUND
+}
+
+// Mirror of the Paystack balance — append-only.
+model WalletTransaction {
+  id          String       @id @default(cuid())
+  kind        WalletTxKind
+  amount      Decimal      @db.Decimal(14, 2) // positive = in, negative = out
+  paystackRef String?
+  note        String?
+  createdAt   DateTime     @default(now())
+}
+
+model Budget {
+  id         String   @id @default(cuid())
+  siteId     String? // null = company-wide
+  categoryId String
+  periodYear Int
+  periodMonth Int // 1-12
+  amount     Decimal  @db.Decimal(14, 2)
+
+  site     Site?           @relation(fields: [siteId], references: [id])
+  category ExpenseCategory @relation(fields: [categoryId], references: [id])
+
+  @@unique([siteId, categoryId, periodYear, periodMonth])
+}
+
+enum TargetMetric {
+  FINISHED_OUTPUT_KG
+  COLLECTION_KG
+  PURCHASE_KG
+  SALES_NAIRA
+}
+
+model Target {
+  id             String       @id @default(cuid())
+  siteId         String? // null = company-wide
+  materialTypeId String? // null = all materials
+  metric         TargetMetric
+  periodYear     Int
+  periodMonth    Int
+  value          Decimal      @db.Decimal(14, 2)
+
+  site         Site?         @relation(fields: [siteId], references: [id])
+  materialType MaterialType? @relation(fields: [materialTypeId], references: [id])
+
+  @@unique([siteId, materialTypeId, metric, periodYear, periodMonth])
+}

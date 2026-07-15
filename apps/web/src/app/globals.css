@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/* Zyntomax design tokens — industrial slate + emerald (see design-system/zyntomax/MASTER.md).
+   Light-first (bright factory/outdoor use), dark supported. Dense dashboard spacing. */
+@theme {
+  --color-primary: #334155;
+  --color-primary-hover: #1e293b;
+  --color-on-primary: #ffffff;
+  --color-secondary: #475569;
+  --color-accent: #059669;
+  --color-accent-hover: #047857;
+  --color-accent-soft: #d1fae5;
+  --color-background: #f8fafc;
+  --color-surface: #ffffff;
+  --color-foreground: #0f172a;
+  --color-muted: #64748b;
+  --color-muted-bg: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-destructive: #dc2626;
+  --color-destructive-soft: #fee2e2;
+  --color-warning: #d97706;
+  --color-warning-soft: #fef3c7;
+  --color-info: #0284c7;
+  --color-info-soft: #e0f2fe;
+  --color-ring: #334155;
+
+  --font-sans: var(--font-fira-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-fira-code), ui-monospace, monospace;
+
+  --radius-card: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #0b1220;
+    --color-surface: #111a2c;
+    --color-foreground: #e2e8f0;
+    --color-muted: #94a3b8;
+    --color-muted-bg: #1e293b;
+    --color-border: #263449;
+    --color-primary: #94a3b8;
+    --color-primary-hover: #cbd5e1;
+    --color-on-primary: #0f172a;
+    --color-accent-soft: #064e3b;
+    --color-destructive-soft: #450a0a;
+    --color-warning-soft: #451a03;
+    --color-info-soft: #082f49;
+  }
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+}
+
+/* Numeric data reads better in the mono font */
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

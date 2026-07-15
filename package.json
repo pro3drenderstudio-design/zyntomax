@@ -1,0 +1,30 @@
+{
+  "name": "zyntomax",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "db:generate": "pnpm --filter @zyntomax/db generate",
+    "db:push": "pnpm --filter @zyntomax/db push",
+    "db:migrate": "pnpm --filter @zyntomax/db migrate",
+    "db:seed": "pnpm --filter @zyntomax/db seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild",
+      "sharp",
+      "bcrypt"
+    ]
+  },
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  }
+}
