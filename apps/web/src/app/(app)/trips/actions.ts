@@ -9,6 +9,7 @@ import { requireRole } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { getSetting } from "@/lib/settings";
 import { siteLocation } from "@/lib/inventory";
+import { recordWeighIn } from "@/lib/collection";
 
 export type FormState = { error?: string };
 
@@ -122,59 +123,15 @@ export async function addWeighIn(
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { tripId, vendorId, materialTypeId, weightKg } = parsed.data;
 
-  const trip = await prisma.trip.findUniqueOrThrow({ where: { id: tripId } });
-  if (!["PLANNED", "IN_PROGRESS"].includes(trip.status)) {
-    return { error: "Weigh-ins can only be added while the trip is in the field." };
-  }
-
-  const rate = await prisma.vendorRate.findFirst({
-    where: { materialTypeId, effectiveFrom: { lte: new Date() } },
-    orderBy: { effectiveFrom: "desc" },
+  const result = await recordWeighIn({
+    clientUuid: randomUUID(),
+    tripId,
+    vendorId,
+    materialTypeId,
+    weightKg,
+    agentId: session.userId,
   });
-  if (!rate) return { error: "No vendor rate set for this material. Add one in Settings." };
-
-  const amount = weightKg * Number(rate.pricePerKg);
-
-  const [gate, vehicle] = await Promise.all([
-    siteLocation(trip.siteId, "VENDOR_GATE"),
-    siteLocation(trip.siteId, "VEHICLE"),
-  ]);
-
-  await prisma.$transaction([
-    prisma.collectionWeighIn.create({
-      data: {
-        clientUuid: randomUUID(),
-        tripId,
-        vendorId,
-        materialTypeId,
-        weightKg,
-        ratePerKg: rate.pricePerKg,
-        amount,
-        agentId: session.userId,
-        confirmation: "NONE",
-      },
-    }),
-    prisma.inventoryMovement.create({
-      data: {
-        fromLocationId: gate.id,
-        toLocationId: vehicle.id,
-        materialTypeId,
-        weightKg,
-        refType: "TRIP",
-        refId: tripId,
-        byId: session.userId,
-      },
-    }),
-    // If the trip was still PLANNED, a weigh-in means it has started
-    ...(trip.status === "PLANNED"
-      ? [prisma.trip.update({ where: { id: tripId }, data: { status: "IN_PROGRESS" } })]
-      : []),
-  ]);
-
-  await prisma.pickupRequest.updateMany({
-    where: { tripId, vendorId, status: "SCHEDULED" },
-    data: { status: "COLLECTED" },
-  });
+  if (!result.ok) return { error: result.error };
 
   revalidatePath(`/trips/${tripId}`);
   return {};

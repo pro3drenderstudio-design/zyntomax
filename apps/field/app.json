@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Zyntomax Field",
+    "slug": "zyntomax-field",
+    "version": "0.1.0",
+    "scheme": "zyntomax-field",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#059669"
+    },
+    "android": {
+      "package": "com.zyntomax.field",
+      "adaptiveIcon": {
+        "backgroundColor": "#059669"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.zyntomax.field",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Used to pin vendor house locations and stamp weigh-ins."
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Used to pin vendor house locations and stamp weigh-ins."
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "http://192.168.1.130:3100"
+    }
+  }
+}

@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { COOKIE_NAME } from "@/lib/session";
 
-const PUBLIC_PATHS = ["/login", "/api/webhooks"];
+// /api/mobile does its own Bearer-token auth
+const PUBLIC_PATHS = ["/login", "/api/webhooks", "/api/mobile"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

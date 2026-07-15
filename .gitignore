@@ -11,3 +11,5 @@ build/
 coverage/
 .expo/
 generated/
+
+.claude/skills/ui-ux-pro-max/
