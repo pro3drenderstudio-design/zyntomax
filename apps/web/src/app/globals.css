@@ -1,28 +1,33 @@
 @import "tailwindcss";
 
-/* Zyntomax design tokens — industrial slate + emerald (see design-system/zyntomax/MASTER.md).
+/* Zyntomax design tokens — brand pulled from the logo:
+   forest green #008037 + lime #7ED957, on industrial slate neutrals.
    Light-first (bright factory/outdoor use), dark supported. Dense dashboard spacing. */
 @theme {
   --color-primary: #334155;
   --color-primary-hover: #1e293b;
   --color-on-primary: #ffffff;
   --color-secondary: #475569;
-  --color-accent: #059669;
-  --color-accent-hover: #047857;
-  --color-accent-soft: #d1fae5;
-  --color-background: #f8fafc;
+  --color-brand: #008037;
+  --color-brand-light: #7ed957;
+  --color-accent: #008037;
+  --color-accent-hover: #006b2e;
+  --color-accent-soft: #d9f7e3;
+  --color-lime: #7ed957;
+  --color-lime-soft: #edfbe2;
+  --color-background: #f6f9f7;
   --color-surface: #ffffff;
   --color-foreground: #0f172a;
   --color-muted: #64748b;
-  --color-muted-bg: #f1f5f9;
-  --color-border: #e2e8f0;
+  --color-muted-bg: #f1f5f4;
+  --color-border: #e3e8e5;
   --color-destructive: #dc2626;
   --color-destructive-soft: #fee2e2;
   --color-warning: #d97706;
   --color-warning-soft: #fef3c7;
   --color-info: #0284c7;
   --color-info-soft: #e0f2fe;
-  --color-ring: #334155;
+  --color-ring: #008037;
 
   --font-sans: var(--font-fira-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-fira-code), ui-monospace, monospace;
@@ -32,16 +37,19 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-background: #0b1220;
-    --color-surface: #111a2c;
+    --color-background: #0a1410;
+    --color-surface: #10201a;
     --color-foreground: #e2e8f0;
     --color-muted: #94a3b8;
-    --color-muted-bg: #1e293b;
-    --color-border: #263449;
+    --color-muted-bg: #1a2c24;
+    --color-border: #26382f;
     --color-primary: #94a3b8;
     --color-primary-hover: #cbd5e1;
     --color-on-primary: #0f172a;
-    --color-accent-soft: #064e3b;
+    --color-accent: #10a24a;
+    --color-accent-hover: #7ed957;
+    --color-accent-soft: #05341d;
+    --color-lime-soft: #1a3312;
     --color-destructive-soft: #450a0a;
     --color-warning-soft: #451a03;
     --color-info-soft: #082f49;

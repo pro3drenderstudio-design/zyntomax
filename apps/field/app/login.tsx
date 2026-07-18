@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, Image, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { login } from "../lib/api";
 import { Field, Button, Label, ErrorText, Card } from "../lib/ui";
@@ -31,9 +31,10 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.logoWrap}>
-        <View style={styles.logoBadge}>
-          <Text style={styles.logoIcon}>♻</Text>
-        </View>
+        <Image
+          source={require("../assets/logo.png")}
+          style={{ width: 120, height: 120, resizeMode: "contain" }}
+        />
         <Text style={styles.title}>Zyntomax Field</Text>
         <Text style={styles.subtitle}>Collection & registration</Text>
       </View>
@@ -71,16 +72,6 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   logoWrap: { alignItems: "center", marginBottom: 24 },
-  logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  logoIcon: { fontSize: 32, color: "#ffffff" },
   title: { fontSize: 22, fontWeight: "700", color: colors.text },
   subtitle: { fontSize: 14, color: colors.muted },
 });

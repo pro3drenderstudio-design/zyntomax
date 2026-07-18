@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Recycle } from "lucide-react";
+import Image from "next/image";
 import { login, type LoginState } from "./actions";
 
 export default function LoginPage() {
@@ -13,14 +13,9 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center justify-center gap-2">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-on-primary">
-            <Recycle size={22} aria-hidden />
-          </span>
-          <div>
-            <h1 className="text-xl font-semibold leading-tight">Zyntomax</h1>
-            <p className="text-xs text-muted">Operations Platform</p>
-          </div>
+        <div className="mb-6 flex flex-col items-center gap-2">
+          <Image src="/logo.png" alt="Zyntomax Ventures Limited" width={140} height={140} priority className="h-28 w-28 object-contain" />
+          <p className="text-sm font-medium text-muted">Operations Platform</p>
         </div>
 
         <form
