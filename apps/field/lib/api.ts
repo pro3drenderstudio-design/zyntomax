@@ -1,8 +1,22 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 
-const API_URL: string =
-  (Constants.expoConfig?.extra?.apiUrl as string) ?? "http://localhost:3100";
+// In development, the API runs on the same machine as Metro — derive its
+// address from the bundler host so a DHCP lease change never breaks the app.
+// extra.apiUrl (app.json) overrides for production builds.
+function resolveApiUrl(): string {
+  const configured = Constants.expoConfig?.extra?.apiUrl as string | undefined;
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const host = hostUri.split(":")[0];
+    if (host && /^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+      return `http://${host}:3100`;
+    }
+  }
+  return configured ?? "http://localhost:3100";
+}
+
+const API_URL: string = resolveApiUrl();
 
 export type MobileUser = {
   id: string;
