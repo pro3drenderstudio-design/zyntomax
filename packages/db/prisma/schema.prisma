@@ -67,6 +67,7 @@ model User {
   staffProfile StaffProfile?
   auditLogs    AuditLog[]
   notifications Notification[]
+  locations    AgentLocation[]
 }
 
 enum RoleName {
@@ -131,6 +132,20 @@ model StaffProfile {
   issuances       Issuance[]
   staffLogs       StaffLog[]
   discrepancyCharges DiscrepancyCharge[]
+}
+
+// Live GPS breadcrumb for a field agent (posted periodically during trips).
+model AgentLocation {
+  id         String   @id @default(cuid())
+  userId     String
+  tripId     String?
+  lat        Float
+  lng        Float
+  recordedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, recordedAt])
 }
 
 model Setting {

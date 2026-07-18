@@ -49,6 +49,22 @@ export default function HomeScreen() {
       ),
     },
     {
+      title: "Pickup requests",
+      hint: "Pending pickups with navigation",
+      href: "/pickups",
+      show: user.roles.some((r) =>
+        ["COLLECTION_AGENT", "TEAM_LEAD", "OPERATIONS_MANAGER", "SUPER_ADMIN"].includes(r),
+      ),
+    },
+    {
+      title: "Vendors",
+      hint: "Browse, call & navigate to vendors",
+      href: "/vendors",
+      show: user.roles.some((r) =>
+        ["COLLECTION_AGENT", "TEAM_LEAD", "OPERATIONS_MANAGER", "SUPER_ADMIN"].includes(r),
+      ),
+    },
+    {
       title: `Pending sync${pending > 0 ? ` (${pending})` : ""}`,
       hint: pending > 0 ? "Records waiting for network" : "Everything is synced",
       href: "/outbox",

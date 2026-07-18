@@ -31,7 +31,7 @@ export type Bootstrap = {
   sites: { id: string; name: string }[];
   localities: { id: string; name: string; siteId: string }[];
   materials: { id: string; name: string }[];
-  vendors: { id: string; name: string; phone: string; localityId: string | null; siteId: string }[];
+  vendors: { id: string; name: string; phone: string; localityId: string | null; siteId: string; lat: number | null; lng: number | null }[];
   banks: { name: string; code: string }[];
 };
 
@@ -44,6 +44,22 @@ export type TripSummary = {
   weighInCount: number;
   totalKg: number;
   totalAmount: number;
+};
+
+export type Pickup = {
+  id: string;
+  estWeightKg: number;
+  status: string;
+  createdAt: string;
+  vendor: {
+    id: string;
+    name: string;
+    phone: string;
+    lat: number | null;
+    lng: number | null;
+    address: string | null;
+    locality: string | null;
+  };
 };
 
 const TOKEN_KEY = "zyntomax.token";
@@ -93,6 +109,20 @@ export async function api<T>(
   const body = await res.json();
   if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
   return body as T;
+}
+
+export async function getPickups(): Promise<Pickup[]> {
+  const data = await api<{ pickups: Pickup[] }>("/api/mobile/pickups");
+  return data.pickups;
+}
+
+/** Post the agent's GPS during a trip (best-effort; ignores failures). */
+export async function postLocation(lat: number, lng: number, tripId?: string): Promise<void> {
+  try {
+    await api("/api/mobile/location", { method: "POST", json: { lat, lng, tripId } });
+  } catch {
+    // best-effort; a dropped ping is fine
+  }
 }
 
 /** Master data, cached for offline use. Returns cache when the network is down. */

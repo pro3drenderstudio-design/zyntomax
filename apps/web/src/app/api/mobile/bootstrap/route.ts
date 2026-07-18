@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     }),
     prisma.vendor.findMany({
       where: { status: "ACTIVE" },
-      select: { id: true, name: true, phone: true, localityId: true, siteId: true },
+      select: { id: true, name: true, phone: true, localityId: true, siteId: true, lat: true, lng: true },
       orderBy: { name: "asc" },
     }),
   ]);

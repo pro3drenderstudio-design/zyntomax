@@ -27,6 +27,7 @@ import {
   HandCoins,
   ClipboardList,
   Fuel,
+  Navigation,
 } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: React.ReactNode };
@@ -55,6 +56,7 @@ const SECTIONS: NavSection[] = [
       { href: "/vendors", label: "Vendors", icon: <Users size={16} /> },
       { href: "/vendors/map", label: "Vendor Map", icon: <MapPin size={16} /> },
       { href: "/trips", label: "Trips", icon: <Truck size={16} /> },
+      { href: "/agents", label: "Live Tracking", icon: <Navigation size={16} /> },
       { href: "/payouts", label: "Payouts", icon: <Banknote size={16} /> },
     ],
   },

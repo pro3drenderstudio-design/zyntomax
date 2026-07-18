@@ -29,8 +29,8 @@
   --color-info-soft: #e0f2fe;
   --color-ring: #008037;
 
-  --font-sans: var(--font-fira-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-fira-code), ui-monospace, monospace;
+  --font-sans: "Fira Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Fira Code", ui-monospace, SFMono-Regular, "Roboto Mono", monospace;
 
   --radius-card: 0.5rem;
 }

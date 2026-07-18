@@ -6,6 +6,7 @@ import * as Crypto from "expo-crypto";
 import { loadBootstrap, type Bootstrap } from "../../lib/api";
 import { submitOrQueue } from "../../lib/queue";
 import { Field, Button, Label, ErrorText, Card } from "../../lib/ui";
+import { useLocationPing } from "../../lib/use-location-ping";
 import { colors } from "../../lib/theme";
 
 export default function WeighInScreen() {
@@ -19,6 +20,9 @@ export default function WeighInScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recorded, setRecorded] = useState(0);
+
+  // Share live location with the admin while collecting on this trip
+  useLocationPing(tripId, true);
 
   useEffect(() => {
     loadBootstrap().then(setBoot);
