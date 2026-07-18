@@ -44,6 +44,7 @@ model Site {
   budgets            Budget[]
   targets            Target[]
   settings           Setting[]
+  dieselLogs         DieselLog[]
 }
 
 enum UserStatus {
@@ -1076,6 +1077,23 @@ model WalletTransaction {
   paystackRef String?
   note        String?
   createdAt   DateTime     @default(now())
+}
+
+// Daily diesel consumption — reported against finished output (litres/kg)
+// to surface diesel theft or inefficiency over time.
+model DieselLog {
+  id           String   @id @default(cuid())
+  siteId       String
+  date         DateTime
+  litres       Decimal  @db.Decimal(10, 2)
+  cost         Decimal? @db.Decimal(14, 2)
+  note         String?
+  recordedById String?
+  createdAt    DateTime @default(now())
+
+  site Site @relation(fields: [siteId], references: [id])
+
+  @@index([siteId, date])
 }
 
 model Budget {

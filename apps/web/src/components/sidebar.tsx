@@ -26,6 +26,7 @@ import {
   X,
   HandCoins,
   ClipboardList,
+  Fuel,
 } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: React.ReactNode };
@@ -98,6 +99,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: "/expenses", label: "Expenses", icon: <Receipt size={16} /> },
       { href: "/wallet", label: "Wallet", icon: <Wallet size={16} /> },
+      { href: "/diesel", label: "Diesel", icon: <Fuel size={16} /> },
       { href: "/budgets", label: "Budgets", icon: <Target size={16} /> },
       { href: "/reports", label: "Reports", icon: <BarChart3 size={16} /> },
     ],

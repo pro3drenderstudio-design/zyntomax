@@ -120,9 +120,52 @@ export default async function ReportsPage({
         }
       />
 
+      {/* Downloadable report types */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {[
+          { t: "pnl", label: "P&L statement" },
+          { t: "production", label: "Production report" },
+          { t: "purchases", label: "Purchases report" },
+          { t: "sales", label: "Sales report" },
+        ].map((r) => (
+          <a
+            key={r.t}
+            href={`/reports/${r.t}?month=${period}`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium hover:bg-muted-bg"
+          >
+            {r.label} <span aria-hidden>↓ PDF</span>
+          </a>
+        ))}
+      </div>
+
+      {/* Long-term projection */}
+      {(() => {
+        const now = new Date();
+        const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === m;
+        const daysInMonth = new Date(year, m, 0).getDate();
+        const dayOfMonth = isCurrentMonth ? now.getDate() : daysInMonth;
+        const frac = dayOfMonth / daysInMonth;
+        const projOutput = frac > 0 ? outputKg / frac : outputKg;
+        const projRevenue = frac > 0 ? revenue / frac : revenue;
+        return (
+          <Card className="mb-4">
+            <h2 className="mb-3 font-medium">Projection {isCurrentMonth ? "(run-rate to month end)" : ""}</h2>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <StatCard label="Output run-rate/day" value={formatKg(dayOfMonth > 0 ? outputKg / dayOfMonth : 0)} />
+              <StatCard label="Projected month-end output" value={formatKg(projOutput)} tone="accent" />
+              <StatCard label="Projected month-end revenue" value={formatNaira(projRevenue)} tone="accent" />
+              <StatCard label="Projected next 3 months output" value={formatKg(projOutput * 3)} hint="at current run-rate" />
+            </div>
+          </Card>
+        );
+      })()}
+
       {/* P&L */}
       <Card className="mb-4">
-        <h2 className="mb-3 font-medium">Profit & loss — {monthLabel}</h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-medium">Profit & loss — {monthLabel}</h2>
+          <a href={`/reports/pnl?month=${period}`} className="text-sm text-accent hover:underline print:hidden">Download PDF →</a>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-max text-sm">
             <tbody className="divide-y divide-border">

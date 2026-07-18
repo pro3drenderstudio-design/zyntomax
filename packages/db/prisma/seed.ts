@@ -393,6 +393,23 @@ async function main() {
     }
   }
 
+  // Diesel logs (demo — last 5 days)
+  if ((await prisma.dieselLog.count()) === 0) {
+    for (let i = 5; i >= 1; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      await prisma.dieselLog.create({
+        data: {
+          siteId: site.id,
+          date: d,
+          litres: 40 + Math.round(Math.random() * 30),
+          cost: (40 + Math.round(Math.random() * 30)) * 1200,
+          note: "Generator + forklift",
+        },
+      });
+    }
+  }
+
   // Opening wallet balance (demo)
   const walletCount = await prisma.walletTransaction.count();
   if (walletCount === 0) {
