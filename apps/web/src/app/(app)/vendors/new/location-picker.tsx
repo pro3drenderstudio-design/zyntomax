@@ -3,8 +3,18 @@
 import { useState } from "react";
 import { LocateFixed } from "lucide-react";
 
-export function LocationPicker() {
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+export function LocationPicker({
+  initialLat,
+  initialLng,
+}: {
+  initialLat?: number;
+  initialLng?: number;
+} = {}) {
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    initialLat != null && initialLng != null
+      ? { lat: initialLat, lng: initialLng }
+      : null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

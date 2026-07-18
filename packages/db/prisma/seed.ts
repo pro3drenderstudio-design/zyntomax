@@ -300,6 +300,7 @@ async function main() {
         data: {
           siteId: site.id,
           localityId: localities[loc.name].id,
+          vendorNo: `ZYN-V-${String(vi + 1).padStart(4, "0")}`,
           name: v,
           phone,
           lat: loc.lat + (Math.random() - 0.5) * 0.03,

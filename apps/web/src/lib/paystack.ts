@@ -94,6 +94,27 @@ export async function paystackBalance(): Promise<number> {
   return ngn ? ngn.balance / 100 : 0;
 }
 
+let bankCache: { name: string; code: string }[] | null = null;
+let bankCacheAt = 0;
+const BANK_TTL = 1000 * 60 * 60 * 12; // 12h
+
+/** Live Nigerian bank list from Paystack (cached); static fallback in sim/offline. */
+export async function listBanks(): Promise<{ name: string; code: string }[]> {
+  if (isSimulated()) return NIGERIAN_BANKS;
+  if (bankCache && Date.now() - bankCacheAt < BANK_TTL) return bankCache;
+  try {
+    const data = await ps<{ name: string; code: string }[]>(`/bank?currency=NGN&perPage=200`);
+    const banks = data
+      .map((b) => ({ name: b.name, code: b.code }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    bankCache = banks;
+    bankCacheAt = Date.now();
+    return banks;
+  } catch {
+    return NIGERIAN_BANKS;
+  }
+}
+
 export const NIGERIAN_BANKS: { name: string; code: string }[] = [
   { name: "Access Bank", code: "044" },
   { name: "Citibank", code: "023" },

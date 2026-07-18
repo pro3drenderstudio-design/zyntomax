@@ -1,16 +1,17 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@zyntomax/db";
-import { requireSession } from "@/lib/auth";
+import { requireSession, hasRole } from "@/lib/auth";
 import {
-  PageHeader, Card, Badge, statusTone, Table, formatKg, formatNaira, StatCard,
+  Card, Badge, statusTone, Table, formatKg, formatNaira, StatCard, Avatar,
 } from "@/components/ui";
+import { VendorActions } from "./vendor-actions";
 
 export default async function VendorDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireSession();
+  const session = await requireSession();
   const { id } = await params;
 
   const vendor = await prisma.vendor.findUnique({
@@ -40,14 +41,29 @@ export default async function VendorDetailPage({
       Number(t.thresholdKg) > lifetimeKg &&
       !vendor.rewardGrants.some((g) => g.tierId === t.id),
   );
+  const canManage = hasRole(session, ["OPERATIONS_MANAGER", "TEAM_LEAD"], vendor.siteId);
 
   return (
     <div>
-      <PageHeader
-        title={vendor.name}
-        subtitle={`${vendor.phone} · ${vendor.locality?.name ?? "No locality"}`}
-        action={<Badge tone={statusTone(vendor.status)}>{vendor.status}</Badge>}
-      />
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Avatar name={vendor.name} url={vendor.photoUrl} size={56} />
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold">{vendor.name}</h1>
+              <Badge tone={statusTone(vendor.status)}>{vendor.status}</Badge>
+            </div>
+            <p className="mt-0.5 text-sm text-muted">
+              {vendor.vendorNo ? `${vendor.vendorNo} · ` : ""}
+              {vendor.nickname ? `"${vendor.nickname}" · ` : ""}
+              {vendor.phone} · {vendor.locality?.name ?? "No locality"}
+            </p>
+          </div>
+        </div>
+        {canManage && (
+          <VendorActions vendorId={vendor.id} status={vendor.status} hasHistory={vendor.weighIns.length > 0} />
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Lifetime collected" value={formatKg(lifetimeKg)} />

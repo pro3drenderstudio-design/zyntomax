@@ -206,7 +206,9 @@ model Vendor {
   id              String       @id @default(cuid())
   siteId          String
   localityId      String?
+  vendorNo        String?      @unique
   name            String
+  nickname        String?
   phone           String       @unique
   photoUrl        String?
   address         String?

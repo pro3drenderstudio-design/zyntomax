@@ -199,6 +199,85 @@ export const buttonClass =
 export const secondaryButtonClass =
   "cursor-pointer rounded-md border border-border bg-surface px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted-bg";
 
+export function Avatar({
+  name,
+  url,
+  size = 36,
+}: {
+  name: string;
+  url?: string | null;
+  size?: number;
+}) {
+  const initials = name
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  if (url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt=""
+        style={{ width: size, height: size }}
+        className="shrink-0 rounded-full object-cover"
+      />
+    );
+  }
+  return (
+    <span
+      style={{ width: size, height: size, fontSize: size * 0.38 }}
+      className="flex shrink-0 items-center justify-center rounded-full bg-accent-soft font-semibold text-accent"
+    >
+      {initials}
+    </span>
+  );
+}
+
+export function Pagination({
+  basePath,
+  page,
+  pageCount,
+  query = {},
+}: {
+  basePath: string;
+  page: number;
+  pageCount: number;
+  query?: Record<string, string | undefined>;
+}) {
+  if (pageCount <= 1) return null;
+  const qs = (p: number) => {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(query)) if (v) params.set(k, v);
+    params.set("page", String(p));
+    return `${basePath}?${params.toString()}`;
+  };
+  return (
+    <div className="mt-3 flex items-center justify-between text-sm">
+      <span className="text-muted">
+        Page {page} of {pageCount}
+      </span>
+      <div className="flex gap-2">
+        <Link
+          href={qs(Math.max(1, page - 1))}
+          aria-disabled={page <= 1}
+          className={`rounded-md border border-border px-3 py-1.5 ${page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-muted-bg"}`}
+        >
+          Previous
+        </Link>
+        <Link
+          href={qs(Math.min(pageCount, page + 1))}
+          aria-disabled={page >= pageCount}
+          className={`rounded-md border border-border px-3 py-1.5 ${page >= pageCount ? "pointer-events-none opacity-40" : "hover:bg-muted-bg"}`}
+        >
+          Next
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function formatNaira(value: number | string): string {
   const n = typeof value === "string" ? Number(value) : value;
   return `₦${n.toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;

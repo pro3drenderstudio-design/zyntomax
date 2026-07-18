@@ -1,7 +1,7 @@
 import { prisma } from "@zyntomax/db";
 import { requireSession, accessibleSiteIds } from "@/lib/auth";
 import { PageHeader } from "@/components/ui";
-import { NIGERIAN_BANKS } from "@/lib/paystack";
+import { listBanks } from "@/lib/paystack";
 import { VendorForm } from "./vendor-form";
 
 export const metadata = { title: "Register vendor" };
@@ -10,7 +10,7 @@ export default async function NewVendorPage() {
   const session = await requireSession();
   const siteIds = accessibleSiteIds(session);
 
-  const [sites, localities] = await Promise.all([
+  const [sites, localities, banks] = await Promise.all([
     prisma.site.findMany({
       where: { active: true, ...(siteIds ? { id: { in: siteIds } } : {}) },
     }),
@@ -18,6 +18,7 @@ export default async function NewVendorPage() {
       where: siteIds ? { siteId: { in: siteIds } } : {},
       orderBy: { name: "asc" },
     }),
+    listBanks(),
   ]);
 
   return (
@@ -29,7 +30,7 @@ export default async function NewVendorPage() {
       <VendorForm
         sites={sites.map((s) => ({ id: s.id, name: s.name }))}
         localities={localities.map((l) => ({ id: l.id, name: l.name, siteId: l.siteId }))}
-        banks={NIGERIAN_BANKS}
+        banks={banks}
       />
     </div>
   );
