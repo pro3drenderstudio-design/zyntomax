@@ -15,6 +15,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ title: "Zyntomax Field" }} />
+        <Stack.Screen name="admin" options={{ title: "Admin overview" }} />
         <Stack.Screen name="login" options={{ title: "Sign in", headerShown: false }} />
         <Stack.Screen name="vendor-new" options={{ title: "Register vendor" }} />
         <Stack.Screen name="vendors" options={{ title: "Vendors" }} />

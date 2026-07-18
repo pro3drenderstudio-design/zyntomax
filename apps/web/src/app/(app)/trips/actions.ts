@@ -10,6 +10,7 @@ import { audit } from "@/lib/audit";
 import { getSetting } from "@/lib/settings";
 import { siteLocation } from "@/lib/inventory";
 import { recordWeighIn } from "@/lib/collection";
+import { approveTripById } from "@/lib/trips";
 
 export type FormState = { error?: string };
 
@@ -281,52 +282,8 @@ export async function reconcileTrip(
 // ── Approval → payout batch ────────────────────────────────────────────
 export async function approveTrip(tripId: string) {
   const session = await requireRole(["FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"]);
-
-  const trip = await prisma.trip.findUniqueOrThrow({
-    where: { id: tripId },
-    include: { weighIns: true, reconciliation: true, payoutBatch: true },
-  });
-  if (trip.status !== "RECONCILED" || !trip.reconciliation) {
-    throw new Error("Trip must be reconciled before approval.");
-  }
-  if (trip.payoutBatch) return; // already approved — idempotent
-
-  // Vendors are paid on the FIELD weigh-in amount (they don't absorb transit losses)
-  const perVendor = new Map<string, number>();
-  for (const w of trip.weighIns) {
-    perVendor.set(w.vendorId, (perVendor.get(w.vendorId) ?? 0) + Number(w.amount));
-  }
-  const total = [...perVendor.values()].reduce((s, v) => s + v, 0);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.tripReconciliation.update({
-      where: { tripId },
-      data: { approvedBy: session.userId, approvedAt: new Date() },
-    });
-    await tx.payoutBatch.create({
-      data: {
-        tripId,
-        totalAmount: total,
-        payouts: {
-          create: [...perVendor.entries()].map(([vendorId, amount]) => ({
-            vendorId,
-            amount,
-            idempotencyKey: `payout_${tripId}_${vendorId}`,
-          })),
-        },
-      },
-    });
-    await tx.trip.update({ where: { id: tripId }, data: { status: "APPROVED" } });
-  });
-
-  await audit({
-    actorId: session.userId,
-    action: "trip.approve",
-    entity: "Trip",
-    entityId: tripId,
-    after: { totalPayout: total, vendors: perVendor.size },
-  });
-
+  const result = await approveTripById(tripId, session.userId);
+  if (!result.ok) throw new Error(result.error);
   revalidatePath(`/trips/${tripId}`);
   revalidatePath("/payouts");
 }

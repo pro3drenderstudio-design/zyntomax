@@ -111,6 +111,32 @@ export async function api<T>(
   return body as T;
 }
 
+export type AdminDashboard = {
+  kpis: {
+    activeVendors: number;
+    collectedTodayKg: number;
+    collectedTodayNaira: number;
+    intakeKg: number;
+    wipKg: number;
+    finishedKg: number;
+    walletBalance: number;
+    flaggedJobs: number;
+    activeTrips: number;
+  };
+  approvals: {
+    reconciledTrips: { id: string; locality: string; date: string; payout: number; vendors: number }[];
+    readyBatches: { id: string; locality: string; total: number; vendors: number; status: string }[];
+  };
+};
+
+export async function getAdminDashboard(): Promise<AdminDashboard> {
+  return api<AdminDashboard>("/api/mobile/admin/dashboard");
+}
+
+export async function approveTrip(tripId: string): Promise<void> {
+  await api("/api/mobile/admin/approve-trip", { method: "POST", json: { tripId } });
+}
+
 export async function getPickups(): Promise<Pickup[]> {
   const data = await api<{ pickups: Pickup[] }>("/api/mobile/pickups");
   return data.pickups;

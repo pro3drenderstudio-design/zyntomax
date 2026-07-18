@@ -33,6 +33,14 @@ export default function HomeScreen() {
 
   const tiles: { title: string; hint: string; href: string; show: boolean }[] = [
     {
+      title: "Admin overview",
+      hint: "Live KPIs, approvals & oversight",
+      href: "/admin",
+      show: user.roles.some((r) =>
+        ["OPERATIONS_MANAGER", "FACTORY_SUPERVISOR", "FINANCE_ADMIN", "SUPER_ADMIN"].includes(r),
+      ),
+    },
+    {
       title: "Register vendor",
       hint: "New household vendor with GPS pin",
       href: "/vendor-new",
