@@ -13,11 +13,12 @@ export default async function NewPurchasePage() {
   ]);
   const siteIds = accessibleSiteIds(session);
 
-  const [sites, suppliers] = await Promise.all([
+  const [sites, suppliers, supplierTypes] = await Promise.all([
     prisma.site.findMany({
       where: { active: true, ...(siteIds ? { id: { in: siteIds } } : {}) },
     }),
     prisma.supplier.findMany({ orderBy: { name: "asc" } }),
+    prisma.supplierType.findMany({ orderBy: { name: "asc" } }),
   ]);
 
   return (
@@ -29,6 +30,7 @@ export default async function NewPurchasePage() {
       <PurchaseForm
         sites={sites.map((s) => ({ id: s.id, name: s.name }))}
         suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
+        supplierTypes={supplierTypes.map((t) => ({ id: t.id, name: t.name }))}
       />
     </div>
   );
