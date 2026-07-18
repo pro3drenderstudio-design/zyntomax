@@ -23,17 +23,16 @@ export default function LoginPage() {
           className="rounded-card border border-border bg-surface p-6 shadow-sm"
         >
           <div className="mb-4">
-            <label htmlFor="phone" className="mb-1 block text-sm font-medium">
-              Phone number
+            <label htmlFor="identifier" className="mb-1 block text-sm font-medium">
+              Email or phone
             </label>
             <input
-              id="phone"
-              name="phone"
-              type="tel"
-              inputMode="tel"
+              id="identifier"
+              name="identifier"
+              type="text"
               autoComplete="username"
               required
-              placeholder="08012345678"
+              placeholder="you@zyntomax.com or 08012345678"
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-ring"
             />
           </div>

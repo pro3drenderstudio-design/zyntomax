@@ -2,10 +2,10 @@ import { notFound } from "next/navigation";
 import { prisma } from "@zyntomax/db";
 import { requireSession, hasRole } from "@/lib/auth";
 import {
-  PageHeader, Card, Badge, statusTone, Table, StatCard, formatNaira, formatKg,
+  Card, Badge, statusTone, Table, StatCard, Avatar, formatNaira, formatKg,
 } from "@/components/ui";
-import { IdCard } from "./id-card";
 import { IssuanceForm, StaffLogForm, AdvanceForm } from "./hr-forms";
+import { StaffAdmin } from "./staff-admin";
 
 const LOG_TONE = { MEDICAL: "info", REWARD: "success", DISCIPLINARY: "destructive" } as const;
 
@@ -40,6 +40,7 @@ export default async function StaffDetailPage({
 
   const isHr = hasRole(session, ["HR_ADMIN", "OPERATIONS_MANAGER"]);
   const isFinance = hasRole(session, ["FINANCE_ADMIN", "HR_ADMIN"]);
+  const isSuperAdmin = hasRole(session, []);
 
   const outstandingAdvance = staff.advances.reduce(
     (s, a) => s + Number(a.amount) - Number(a.repaidAmount),
@@ -50,20 +51,35 @@ export default async function StaffDetailPage({
 
   return (
     <div>
-      <PageHeader
-        title={staff.user.name}
-        subtitle={`${staff.staffNo} · ${staff.user.phone}`}
-        action={<Badge tone={statusTone(staff.user.status)}>{staff.user.status}</Badge>}
-      />
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Avatar name={staff.user.name} url={staff.photoUrl} size={56} />
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold">{staff.user.name}</h1>
+              <Badge tone={statusTone(staff.user.status)}>{staff.user.status}</Badge>
+            </div>
+            <p className="mt-0.5 text-sm text-muted">
+              {staff.staffNo} · {primaryRole} · {staff.user.phone}
+            </p>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {staff.user.roles.map((r) => (
+                <Badge key={r.id} tone="neutral">{r.role.split("_").map((w) => w[0] + w.slice(1).toLowerCase()).join(" ")}</Badge>
+              ))}
+            </div>
+          </div>
+        </div>
+        <StaffAdmin
+          staffId={staff.id}
+          status={staff.user.status}
+          currentRoles={staff.user.roles.map((r) => r.role)}
+          siteId={staff.user.roles[0]?.siteId ?? ""}
+          canManage={isHr}
+          isSuperAdmin={isSuperAdmin}
+        />
+      </div>
 
       <div className="flex flex-wrap items-start gap-4">
-        <IdCard
-          name={staff.user.name}
-          staffNo={staff.staffNo}
-          role={primaryRole}
-          photoUrl={staff.photoUrl}
-          hireDate={staff.hireDate}
-        />
         <div className="grid min-w-64 flex-1 grid-cols-2 gap-3">
           <StatCard label="Earned (last 12 weeks)" value={formatNaira(totalEarned)} />
           <StatCard

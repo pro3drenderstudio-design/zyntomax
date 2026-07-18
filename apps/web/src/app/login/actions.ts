@@ -11,24 +11,30 @@ export async function login(
   _prev: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
-  const phone = String(formData.get("phone") ?? "").trim();
+  const identifier = String(formData.get("identifier") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  if (!phone || !password) {
-    return { error: "Enter your phone number and password." };
+  if (!identifier || !password) {
+    return { error: "Enter your email or phone and password." };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { phone },
+  const isEmail = identifier.includes("@");
+  const user = await prisma.user.findFirst({
+    where: isEmail
+      ? { email: { equals: identifier, mode: "insensitive" } }
+      : { phone: identifier },
     include: { roles: true },
   });
 
-  if (!user || !user.passwordHash || user.status !== "ACTIVE") {
-    return { error: "Invalid phone number or password." };
+  if (!user || !user.passwordHash) {
+    return { error: "Invalid credentials." };
+  }
+  if (user.status !== "ACTIVE") {
+    return { error: "This account is not active. Contact your administrator." };
   }
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) {
-    return { error: "Invalid phone number or password." };
+    return { error: "Invalid credentials." };
   }
 
   await createSession({

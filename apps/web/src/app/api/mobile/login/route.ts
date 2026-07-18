@@ -4,16 +4,21 @@ import { verifyPassword } from "@/lib/password";
 import { issueMobileToken } from "@/lib/mobile-auth";
 
 export async function POST(request: NextRequest) {
-  const { phone, password } = (await request.json()) as {
+  const body = (await request.json()) as {
     phone?: string;
+    identifier?: string;
     password?: string;
   };
-  if (!phone || !password) {
-    return NextResponse.json({ error: "Phone and password required" }, { status: 400 });
+  const identifier = (body.identifier ?? body.phone ?? "").trim();
+  const password = body.password;
+  if (!identifier || !password) {
+    return NextResponse.json({ error: "Phone/email and password required" }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { phone },
+  const user = await prisma.user.findFirst({
+    where: identifier.includes("@")
+      ? { email: { equals: identifier, mode: "insensitive" } }
+      : { phone: identifier },
     include: { roles: true, staffProfile: true },
   });
   if (!user?.passwordHash || user.status !== "ACTIVE") {

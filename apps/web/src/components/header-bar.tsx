@@ -56,7 +56,7 @@ export function HeaderBar({
   const showBack = pathname !== "/";
 
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-surface/90 px-4 py-2 backdrop-blur lg:px-6">
+    <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-surface/90 px-4 py-2 backdrop-blur print:hidden lg:px-6">
       <div className="flex min-w-0 items-center gap-2">
         {showBack && (
           <button

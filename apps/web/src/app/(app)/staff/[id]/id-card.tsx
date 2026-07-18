@@ -1,73 +1,90 @@
 import QRCode from "qrcode";
 
-/**
- * Auto-generated staff ID card. The QR encodes the staff number and is used
- * to log in at factory scale stations. Print via the browser (Ctrl+P).
- */
-export async function IdCard({
-  name,
-  staffNo,
-  role,
-  photoUrl,
-  hireDate,
-}: {
+export type IdCardData = {
   name: string;
   staffNo: string;
   role: string;
   photoUrl?: string | null;
   hireDate?: Date | null;
-}) {
-  const qr = await QRCode.toDataURL(`ZYNTOMAX:STAFF:${staffNo}`, {
+  phone?: string | null;
+  address?: string | null;
+  bloodContact?: string | null; // emergency contact line
+  nextOfKin?: string | null;
+};
+
+/**
+ * Auto-generated staff ID card — front and back. The QR encodes the staff
+ * number and doubles as the factory scale-station login. Rendered with the
+ * company logo; printable to PDF via the browser.
+ */
+export async function IdCard({ data }: { data: IdCardData }) {
+  const qr = await QRCode.toDataURL(`ZYNTOMAX:STAFF:${data.staffNo}`, {
     margin: 1,
-    width: 120,
+    width: 140,
     color: { dark: "#0f172a", light: "#ffffff" },
   });
+  const initials = data.name.split(" ").map((n) => n[0]).slice(0, 2).join("");
 
   return (
-    <div
-      className="w-[340px] overflow-hidden rounded-xl border border-border bg-white text-slate-900 shadow-md print:shadow-none"
-      aria-label={`Staff ID card for ${name}`}
-    >
-      <div className="flex items-center justify-between bg-emerald-700 px-4 py-2.5 text-white">
-        <div>
-          <p className="text-sm font-bold leading-tight">ZYNTOMAX VENTURES LTD</p>
-          <p className="text-[10px] uppercase tracking-wider opacity-80">Staff Identity Card</p>
+    <div className="flex flex-wrap gap-4">
+      {/* FRONT */}
+      <div className="w-[340px] overflow-hidden rounded-xl border border-border bg-white text-slate-900 shadow-md print:shadow-none">
+        <div className="flex items-center gap-2 bg-[#008037] px-4 py-2.5 text-white">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="" className="h-8 w-8 rounded bg-white/95 object-contain p-0.5" />
+          <div>
+            <p className="text-sm font-bold leading-tight">ZYNTOMAX VENTURES LTD</p>
+            <p className="text-[10px] uppercase tracking-wider opacity-90">Staff Identity Card</p>
+          </div>
         </div>
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-          <path d="M7 19H4.815a1.83 1.83 0 0 1-1.57-.881 1.785 1.785 0 0 1-.004-1.784L7.196 9.5" />
-          <path d="M11 19h8.203a1.83 1.83 0 0 0 1.556-.89 1.784 1.784 0 0 0 0-1.775l-1.226-2.12" />
-          <path d="m14 16-3 3 3 3" />
-          <path d="M8.293 13.596 7.196 9.5 3.1 10.598" />
-          <path d="m9.344 5.811 1.093-1.892A1.83 1.83 0 0 1 11.985 3a1.784 1.784 0 0 1 1.546.888l3.943 6.843" />
-          <path d="m13.378 9.633 4.096 1.098 1.097-4.096" />
-        </svg>
+        <div className="flex gap-3 p-4">
+          <div className="flex h-24 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md bg-slate-100">
+            {data.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={data.photoUrl} alt={`Photo of ${data.name}`} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-2xl font-semibold text-slate-400">{initials}</span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-base font-bold">{data.name}</p>
+            <p className="text-sm font-medium text-[#008037]">{data.role}</p>
+            <p className="mt-1 font-mono text-sm">{data.staffNo}</p>
+            {data.hireDate && (
+              <p className="text-[11px] text-slate-500">
+                Since {data.hireDate.toLocaleDateString("en-NG", { month: "short", year: "numeric" })}
+              </p>
+            )}
+            {data.phone && <p className="mt-1 text-[11px] text-slate-500">{data.phone}</p>}
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={qr} alt="" className="h-[76px] w-[76px] shrink-0 self-end" />
+        </div>
+        <div className="h-1.5 bg-[#7ed957]" />
       </div>
-      <div className="flex gap-3 p-4">
-        <div className="flex h-24 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md bg-slate-100">
-          {photoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoUrl} alt={`Photo of ${name}`} className="h-full w-full object-cover" />
-          ) : (
-            <span className="text-2xl font-semibold text-slate-400">
-              {name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
-            </span>
-          )}
+
+      {/* BACK */}
+      <div className="flex w-[340px] flex-col overflow-hidden rounded-xl border border-border bg-white text-slate-900 shadow-md print:shadow-none">
+        <div className="h-1.5 bg-[#7ed957]" />
+        <div className="flex-1 p-4 text-[12px] leading-relaxed">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#008037]">Cardholder details</p>
+          <dl className="grid grid-cols-[90px_1fr] gap-x-2 gap-y-1">
+            <dt className="text-slate-500">Staff No.</dt>
+            <dd className="font-mono">{data.staffNo}</dd>
+            {data.address && (<><dt className="text-slate-500">Address</dt><dd>{data.address}</dd></>)}
+            {data.nextOfKin && (<><dt className="text-slate-500">Next of kin</dt><dd>{data.nextOfKin}</dd></>)}
+            {data.bloodContact && (<><dt className="text-slate-500">Emergency</dt><dd>{data.bloodContact}</dd></>)}
+          </dl>
+          <p className="mt-3 text-[10px] text-slate-500">
+            If found, please return to Zyntomax Ventures Limited. This card remains company property
+            and must be surrendered on exit.
+          </p>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-bold">{name}</p>
-          <p className="text-sm text-emerald-700">{role}</p>
-          <p className="mt-1 font-mono text-sm">{staffNo}</p>
-          {hireDate && (
-            <p className="text-[11px] text-slate-500">
-              Since {hireDate.toLocaleDateString("en-NG", { month: "short", year: "numeric" })}
-            </p>
-          )}
+        <div className="flex items-center gap-2 border-t border-slate-200 bg-slate-50 px-4 py-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="" className="h-6 w-6 object-contain" />
+          <p className="text-[10px] text-slate-500">Zyntomax Ventures Limited · Recycling Operations</p>
         </div>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={qr} alt={`QR code for ${staffNo}`} className="h-[76px] w-[76px] shrink-0" />
-      </div>
-      <div className="bg-slate-100 px-4 py-1.5 text-center text-[10px] text-slate-500">
-        This card remains the property of Zyntomax Ventures Limited
       </div>
     </div>
   );
