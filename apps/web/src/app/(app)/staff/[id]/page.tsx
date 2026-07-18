@@ -6,6 +6,7 @@ import {
 } from "@/components/ui";
 import { IssuanceForm, StaffLogForm, AdvanceForm } from "./hr-forms";
 import { StaffAdmin } from "./staff-admin";
+import { WageModelCard } from "./wage-model";
 
 const LOG_TONE = { MEDICAL: "info", REWARD: "success", DISCIPLINARY: "destructive" } as const;
 
@@ -101,6 +102,16 @@ export default async function StaffDetailPage({
           </Card>
         </div>
       </div>
+
+      {isSuperAdmin && (
+        <div className="mt-4 max-w-md">
+          <WageModelCard
+            staffId={staff.id}
+            wageModel={staff.wageModel}
+            baseSalaryWeekly={staff.baseSalaryWeekly ? Number(staff.baseSalaryWeekly) : null}
+          />
+        </div>
+      )}
 
       {/* Recent work */}
       {staff.jobAssignments.length > 0 && (

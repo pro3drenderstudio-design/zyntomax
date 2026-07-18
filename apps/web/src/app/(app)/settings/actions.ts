@@ -143,3 +143,91 @@ export async function createRewardTier(
   revalidatePath("/settings");
   return {};
 }
+
+// ── Supplier types (dynamic) ────────────────────────────────────────────
+export async function createSupplierType(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  await requireRole(["OPERATIONS_MANAGER", "PURCHASING_MANAGER"]);
+  const name = String(formData.get("name") ?? "").trim();
+  if (name.length < 2) return { error: "Enter a type name." };
+  const existing = await prisma.supplierType.findUnique({ where: { name } });
+  if (existing) return { error: "That supplier type already exists." };
+  await prisma.supplierType.create({ data: { name } });
+  revalidatePath("/settings");
+  revalidatePath("/suppliers");
+  return {};
+}
+
+export async function deleteSupplierType(id: string) {
+  await requireRole(["OPERATIONS_MANAGER", "PURCHASING_MANAGER"]);
+  const inUse = await prisma.supplier.count({ where: { typeId: id } });
+  if (inUse > 0) {
+    // Detach suppliers rather than block deletion.
+    await prisma.supplier.updateMany({ where: { typeId: id }, data: { typeId: null } });
+  }
+  await prisma.supplierType.delete({ where: { id } });
+  revalidatePath("/settings");
+  revalidatePath("/suppliers");
+}
+
+// ── Expense categories (add / remove) ──────────────────────────────────
+export async function createExpenseCategory(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  await requireRole(["OPERATIONS_MANAGER", "FINANCE_ADMIN"]);
+  const name = String(formData.get("name") ?? "").trim();
+  if (name.length < 2) return { error: "Enter a category name." };
+  const existing = await prisma.expenseCategory.findUnique({ where: { name } });
+  if (existing) return { error: "That category already exists." };
+  await prisma.expenseCategory.create({ data: { name } });
+  revalidatePath("/settings");
+  revalidatePath("/expenses");
+  return {};
+}
+
+export async function deleteExpenseCategory(id: string): Promise<void> {
+  await requireRole(["OPERATIONS_MANAGER", "FINANCE_ADMIN"]);
+  const inUse = await prisma.expense.count({ where: { categoryId: id } });
+  if (inUse > 0) return; // keep categories that have expenses (preserve history)
+  await prisma.budget.deleteMany({ where: { categoryId: id } });
+  await prisma.expenseCategory.delete({ where: { id } });
+  revalidatePath("/settings");
+  revalidatePath("/expenses");
+}
+
+// ── Wage model per staff (Super Admin) ─────────────────────────────────
+export async function setStaffWage(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const session = await requireRole([]); // SUPER_ADMIN only
+  const staffId = String(formData.get("staffId") ?? "");
+  const wageModel = String(formData.get("wageModel") ?? "COMMISSION") as
+    | "COMMISSION" | "SALARY" | "COMMISSION_PLUS_BASE";
+  const baseRaw = formData.get("baseSalaryWeekly");
+  const baseSalaryWeekly = baseRaw ? Number(baseRaw) : null;
+
+  if (wageModel !== "COMMISSION" && (!baseSalaryWeekly || baseSalaryWeekly <= 0)) {
+    return { error: "Enter the weekly base salary for salaried staff." };
+  }
+
+  await prisma.staffProfile.update({
+    where: { id: staffId },
+    data: {
+      wageModel,
+      baseSalaryWeekly: wageModel === "COMMISSION" ? null : baseSalaryWeekly,
+    },
+  });
+  await audit({
+    actorId: session.userId,
+    action: "staff.wage_model",
+    entity: "StaffProfile",
+    entityId: staffId,
+    after: { wageModel, baseSalaryWeekly },
+  });
+  revalidatePath(`/staff/${staffId}`);
+  return {};
+}

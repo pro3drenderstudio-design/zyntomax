@@ -4,13 +4,14 @@ import { getSetting } from "@/lib/settings";
 import { PageHeader, Card, Table, formatNaira, formatKg, Badge } from "@/components/ui";
 import {
   GeneralSettingsForm, VendorRateForm, PieceRateForm, SiteForm, LocalityForm, RewardTierForm,
+  SupplierTypeManager, ExpenseCategoryManager,
 } from "./settings-forms";
 
 export default async function SettingsPage() {
   const session = await requireRole(["OPERATIONS_MANAGER"]);
   const isSuperAdmin = hasRole(session, []);
 
-  const [materials, stages, sites, localities, tiers, vendorRates, rateCards] =
+  const [materials, stages, sites, localities, tiers, vendorRates, rateCards, supplierTypes, expenseCategories] =
     await Promise.all([
       prisma.materialType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       prisma.processStage.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
@@ -26,6 +27,8 @@ export default async function SettingsPage() {
         include: { stage: true, materialType: true },
         orderBy: { effectiveFrom: "desc" },
       }),
+      prisma.supplierType.findMany({ orderBy: { name: "asc" } }),
+      prisma.expenseCategory.findMany({ orderBy: { name: "asc" } }),
     ]);
 
   const settings = {
@@ -132,6 +135,17 @@ export default async function SettingsPage() {
             ))}
           </ul>
           <LocalityForm sites={sites.filter((s) => s.active).map((s) => ({ id: s.id, name: s.name }))} />
+        </Card>
+      </div>
+
+      <div className="mb-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <h2 className="mb-3 font-medium">Supplier types</h2>
+          <SupplierTypeManager items={supplierTypes.map((t) => ({ id: t.id, name: t.name }))} />
+        </Card>
+        <Card>
+          <h2 className="mb-3 font-medium">Expense categories</h2>
+          <ExpenseCategoryManager items={expenseCategories.map((c) => ({ id: c.id, name: c.name }))} />
         </Card>
       </div>
 

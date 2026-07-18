@@ -94,7 +94,7 @@ export default async function PayrollPage() {
                 No wages this week (no completed jobs).
               </p>
             ) : (
-              <Table headers={["Staff", "Earned", "Advance", "Net pay", "Payment"]}>
+              <Table headers={["Staff", "Commission", "Base", "Advance", "Discrepancy", "Net pay", "Payment"]}>
                 {run.items.map((i) => (
                   <tr key={i.id}>
                     <td className="px-3 py-2">
@@ -103,9 +103,13 @@ export default async function PayrollPage() {
                       </Link>
                       <span className="tabular ml-1 text-xs text-muted">{i.staff.staffNo}</span>
                     </td>
-                    <td className="tabular px-3 py-2">{formatNaira(Number(i.earnedAmount))}</td>
+                    <td className="tabular px-3 py-2">{formatNaira(Number(i.commissionAmount))}</td>
+                    <td className="tabular px-3 py-2">{Number(i.baseAmount) > 0 ? formatNaira(Number(i.baseAmount)) : "—"}</td>
                     <td className="tabular px-3 py-2 text-warning">
                       {Number(i.advanceDeduction) > 0 ? `−${formatNaira(Number(i.advanceDeduction))}` : "—"}
+                    </td>
+                    <td className="tabular px-3 py-2 text-destructive">
+                      {Number(i.discrepancyDeduction) > 0 ? `−${formatNaira(Number(i.discrepancyDeduction))}` : "—"}
                     </td>
                     <td className="tabular px-3 py-2 font-medium">{formatNaira(Number(i.netAmount))}</td>
                     <td className="px-3 py-2">

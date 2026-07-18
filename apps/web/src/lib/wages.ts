@@ -31,16 +31,46 @@ export async function rateFor(
 
 export type StaffEarning = {
   staffId: string;
-  amount: number;
+  commissionAmount: number;
+  baseAmount: number;
   jobIds: string[];
 };
 
-/** Earnings per staff for un-payrolled jobs completed in [from, to). */
+/**
+ * Full weekly earnings per staff, honouring each staff member's wage model:
+ *  - COMMISSION: piece-rate on good output only
+ *  - SALARY: weekly base only (no commission)
+ *  - COMMISSION_PLUS_BASE: piece-rate + weekly base
+ * A stage's rate card can be based on scale-in or scale-out (see rateBasisKg).
+ */
 export async function computeEarnings(
   siteId: string,
   from: Date,
   to: Date,
 ): Promise<StaffEarning[]> {
+  const perStaff = new Map<string, StaffEarning>();
+  const ensure = (id: string) => {
+    let cur = perStaff.get(id);
+    if (!cur) {
+      cur = { staffId: id, commissionAmount: 0, baseAmount: 0, jobIds: [] };
+      perStaff.set(id, cur);
+    }
+    return cur;
+  };
+
+  // Wage models for staff in scope
+  const staffProfiles = await prisma.staffProfile.findMany({
+    where: {
+      user: {
+        status: "ACTIVE",
+        roles: { some: { OR: [{ siteId }, { siteId: null }] } },
+      },
+    },
+    select: { id: true, wageModel: true, baseSalaryWeekly: true },
+  });
+  const wageOf = new Map(staffProfiles.map((s) => [s.id, s]));
+
+  // Commission from completed jobs not yet on a payroll
   const jobs = await prisma.job.findMany({
     where: {
       siteId,
@@ -48,27 +78,38 @@ export async function computeEarnings(
       payrollRunId: null,
       completedAt: { gte: from, lt: to },
     },
-    include: { assignments: true },
+    include: { assignments: true, stage: true },
   });
 
-  const perStaff = new Map<string, StaffEarning>();
   for (const job of jobs) {
-    const outKg = Number(job.weightOutKg ?? 0);
-    if (outKg <= 0) continue;
-    const rate = await rateFor(
-      job.stageId,
-      job.materialTypeId,
-      job.completedAt ?? new Date(),
-      job.siteId,
-    );
+    // Pay basis: crushers on scale-out, sorters on scale-in (per stage).
+    const basisKg =
+      job.stage.payBasis === "SCALE_IN"
+        ? Number(job.weightInKg)
+        : Number(job.weightOutKg ?? 0);
+    if (basisKg <= 0) continue;
+    const rate = await rateFor(job.stageId, job.materialTypeId, job.completedAt ?? new Date(), job.siteId);
     if (rate === null) continue;
-    const jobWage = outKg * rate;
+    const jobWage = basisKg * rate;
     for (const a of job.assignments) {
-      const cur = perStaff.get(a.staffId) ?? { staffId: a.staffId, amount: 0, jobIds: [] };
-      cur.amount += jobWage * Number(a.share);
-      if (!cur.jobIds.includes(job.id)) cur.jobIds.push(job.id);
-      perStaff.set(a.staffId, cur);
+      const model = wageOf.get(a.staffId)?.wageModel ?? "COMMISSION";
+      const cur = ensure(a.staffId);
+      cur.jobIds.push(job.id);
+      // Salaried staff don't earn commission
+      if (model !== "SALARY") cur.commissionAmount += jobWage * Number(a.share);
     }
   }
-  return [...perStaff.values()];
+
+  // Weekly base for salaried / commission+base staff (once per week)
+  for (const s of staffProfiles) {
+    if (s.wageModel === "COMMISSION") continue;
+    const base = Number(s.baseSalaryWeekly ?? 0);
+    if (base <= 0) continue;
+    ensure(s.id).baseAmount += base;
+  }
+
+  // Only include staff who actually earned something this week
+  return [...perStaff.values()].filter(
+    (e) => e.commissionAmount > 0 || e.baseAmount > 0,
+  );
 }

@@ -94,10 +94,18 @@ model UserRole {
   @@unique([userId, role, siteId])
 }
 
+enum WageModel {
+  COMMISSION // piece-rate on good output only (default)
+  SALARY // fixed weekly salary only
+  COMMISSION_PLUS_BASE // piece-rate + weekly base
+}
+
 model StaffProfile {
   id               String    @id @default(cuid())
   userId           String    @unique
   staffNo          String    @unique
+  wageModel        WageModel @default(COMMISSION)
+  baseSalaryWeekly Decimal?  @db.Decimal(14, 2)
   photoUrl         String?
   address          String?
   hireDate         DateTime?
@@ -121,6 +129,7 @@ model StaffProfile {
   advances        SalaryAdvance[]
   issuances       Issuance[]
   staffLogs       StaffLog[]
+  discrepancyCharges DiscrepancyCharge[]
 }
 
 model Setting {
@@ -437,24 +446,48 @@ model Payout {
 
 // ───────────────────────────── Purchasing ─────────────────────────────
 
-enum SupplierKind {
-  INDEPENDENT_COLLECTOR
-  DUMPSITE
-  RESELLER
+model SupplierType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  suppliers Supplier[]
 }
 
 model Supplier {
-  id              String       @id @default(cuid())
+  id              String   @id @default(cuid())
   name            String
-  kind            SupplierKind @default(INDEPENDENT_COLLECTOR)
+  typeId          String?
   phone           String?
+  contactPerson   String?
+  contactPhone    String?
+  address         String?
   bankName        String?
   bankAccountNo   String?
   bankAccountName String?
   notes           String?
-  createdAt       DateTime     @default(now())
+  createdAt       DateTime @default(now())
 
+  type            SupplierType?      @relation(fields: [typeId], references: [id])
   purchaseBatches PurchaseBatch[]
+  prepayments     SupplierPrepayment[]
+}
+
+// Upfront money paid to a supplier before delivery. Purchase batches draw
+// down against the running prepayment balance (ledger-style, append-only).
+model SupplierPrepayment {
+  id         String        @id @default(cuid())
+  supplierId String
+  amount     Decimal       @db.Decimal(14, 2) // positive = paid in advance
+  method     PaymentMethod @default(TRANSFER)
+  reference  String?
+  note       String?
+  paidById   String?
+  createdAt  DateTime      @default(now())
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@index([supplierId])
 }
 
 enum PurchasePaymentStatus {
@@ -534,17 +567,43 @@ model MaterialType {
   rateCards           RateCard[]
   vendorRates         VendorRate[]
   targets             Target[]
+  stageOutputs        StageOutput[]
+}
+
+enum PayBasis {
+  SCALE_IN // staff paid on weight assigned in (e.g. sorters)
+  SCALE_OUT // staff paid on good output (e.g. crushers, pelletizers)
 }
 
 model ProcessStage {
-  id     String  @id @default(cuid())
-  name   String  @unique
-  active Boolean @default(true)
+  id       String   @id @default(cuid())
+  name     String   @unique
+  active   Boolean  @default(true)
+  payBasis PayBasis @default(SCALE_OUT)
 
   routes    MaterialRoute[]
   jobs      Job[]
   locations InventoryLocation[]
   rateCards RateCard[]
+  outputs   StageOutput[]
+}
+
+// The distinct output materials a stage produces for a given input material,
+// with an optional colour tag. E.g. Sorting + PET → "PET caps", "Pre-baled PET".
+// Dynamic: admins define these per stage/material in Materials & Stages.
+model StageOutput {
+  id             String  @id @default(cuid())
+  stageId        String
+  materialTypeId String // the INPUT material this output derives from
+  name           String
+  color          String? // hex tag for the admin UI
+  active         Boolean @default(true)
+
+  stage        ProcessStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  materialType MaterialType @relation(fields: [materialTypeId], references: [id])
+  jobOutputs   JobOutput[]
+
+  @@index([stageId, materialTypeId])
 }
 
 model MaterialRoute {
@@ -666,10 +725,26 @@ model Job {
   stage        ProcessStage    @relation(fields: [stageId], references: [id])
   materialType MaterialType    @relation(fields: [materialTypeId], references: [id])
   assignments  JobAssignment[]
+  outputs      JobOutput[]
+  discrepancyCharges DiscrepancyCharge[]
   payrollRun   PayrollRun?     @relation(fields: [payrollRunId], references: [id])
 
   @@index([siteId, status])
   @@index([lotNo])
+}
+
+// A scaled-out output line for a job, mapped to one of the stage's defined
+// outputs. Sum of a job's outputs + waste + discrepancy = weightIn.
+model JobOutput {
+  id            String  @id @default(cuid())
+  jobId         String
+  stageOutputId String
+  weightKg      Decimal @db.Decimal(10, 2)
+
+  job         Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  stageOutput StageOutput @relation(fields: [stageOutputId], references: [id])
+
+  @@index([jobId])
 }
 
 model JobAssignment {
@@ -682,6 +757,24 @@ model JobAssignment {
   staff StaffProfile @relation(fields: [staffId], references: [id])
 
   @@unique([jobId, staffId])
+}
+
+// A flagged discrepancy resolved by charging a staff member (or supervisor).
+// Settled against a payroll item when the next payroll run is opened.
+model DiscrepancyCharge {
+  id            String   @id @default(cuid())
+  jobId         String
+  staffId       String
+  amount        Decimal  @db.Decimal(14, 2)
+  reason        String?
+  payrollItemId String?
+  createdAt     DateTime @default(now())
+
+  job         Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  staff       StaffProfile @relation(fields: [staffId], references: [id])
+  payrollItem PayrollItem? @relation(fields: [payrollItemId], references: [id])
+
+  @@index([staffId, payrollItemId])
 }
 
 // ───────────────────────────── HR & Wages ─────────────────────────────
@@ -737,17 +830,21 @@ model PayrollRun {
 }
 
 model PayrollItem {
-  id               String  @id @default(cuid())
-  runId            String
-  staffId          String
-  earnedAmount     Decimal @db.Decimal(14, 2)
-  advanceDeduction Decimal @default(0) @db.Decimal(14, 2)
-  netAmount        Decimal @db.Decimal(14, 2)
-  paymentRef       String?
-  paidAt           DateTime?
+  id                   String  @id @default(cuid())
+  runId                String
+  staffId              String
+  commissionAmount     Decimal @default(0) @db.Decimal(14, 2)
+  baseAmount           Decimal @default(0) @db.Decimal(14, 2)
+  earnedAmount         Decimal @db.Decimal(14, 2) // commission + base
+  advanceDeduction     Decimal @default(0) @db.Decimal(14, 2)
+  discrepancyDeduction Decimal @default(0) @db.Decimal(14, 2) // theft/loss charged back
+  netAmount            Decimal @db.Decimal(14, 2)
+  paymentRef           String?
+  paidAt               DateTime?
 
   run   PayrollRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
   staff StaffProfile @relation(fields: [staffId], references: [id])
+  discrepancyCharges DiscrepancyCharge[]
 
   @@unique([runId, staffId])
 }

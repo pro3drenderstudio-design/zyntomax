@@ -315,14 +315,27 @@ async function main() {
     vi++;
   }
 
-  // ── Suppliers & customers (demo) ────────────────────────────────────
+  // ── Supplier types (dynamic) & suppliers ────────────────────────────
+  const supplierTypeNames = ["Independent collector", "Dumpsite aggregator", "Reseller"];
+  const supplierTypes: Record<string, { id: string }> = {};
+  for (const name of supplierTypeNames) {
+    supplierTypes[name] = await prisma.supplierType.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+  }
   for (const s of [
-    { name: "Olusosun Dumpsite Aggregators", kind: "DUMPSITE" as const },
-    { name: "Kano Independent Collectors Union", kind: "INDEPENDENT_COLLECTOR" as const },
-    { name: "GreenCycle Resellers Ltd", kind: "RESELLER" as const },
+    { name: "Olusosun Dumpsite Aggregators", type: "Dumpsite aggregator" },
+    { name: "Kano Independent Collectors Union", type: "Independent collector" },
+    { name: "GreenCycle Resellers Ltd", type: "Reseller" },
   ]) {
     const existing = await prisma.supplier.findFirst({ where: { name: s.name } });
-    if (!existing) await prisma.supplier.create({ data: s });
+    if (!existing) {
+      await prisma.supplier.create({
+        data: { name: s.name, typeId: supplierTypes[s.type].id },
+      });
+    }
   }
 
   for (const c of [

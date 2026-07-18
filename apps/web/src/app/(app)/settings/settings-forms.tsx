@@ -1,11 +1,73 @@
 "use client";
 
 import { useActionState } from "react";
+import { X } from "lucide-react";
 import {
   saveSettings, setVendorRate, setPieceRate, createSite, createLocality, createRewardTier,
+  createSupplierType, deleteSupplierType, createExpenseCategory, deleteExpenseCategory,
   type FormState,
 } from "./actions";
 import { inputClass, labelClass, buttonClass } from "@/components/ui";
+
+type NamedItem = { id: string; name: string };
+
+export function SupplierTypeManager({ items }: { items: NamedItem[] }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(createSupplierType, {});
+  return (
+    <div>
+      <ul className="mb-3 flex flex-wrap gap-2">
+        {items.map((t) => (
+          <li key={t.id} className="flex items-center gap-1.5 rounded-full bg-muted-bg px-3 py-1 text-sm">
+            {t.name}
+            <form action={deleteSupplierType.bind(null, t.id)}>
+              <button type="submit" aria-label={`Delete ${t.name}`} className="cursor-pointer text-muted hover:text-destructive">
+                <X size={13} />
+              </button>
+            </form>
+          </li>
+        ))}
+        {items.length === 0 && <li className="text-sm text-muted">No supplier types yet.</li>}
+      </ul>
+      <form action={action} className="flex items-end gap-2">
+        <div className="flex-1">
+          <label className={labelClass}>New supplier type</label>
+          <input name="name" required placeholder="e.g. Scrap dealer" className={inputClass} />
+        </div>
+        <button type="submit" disabled={pending} className={buttonClass}>{pending ? "Adding…" : "Add"}</button>
+      </form>
+      {state.error && <p className="mt-1 text-sm text-destructive">{state.error}</p>}
+    </div>
+  );
+}
+
+export function ExpenseCategoryManager({ items }: { items: NamedItem[] }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(createExpenseCategory, {});
+  return (
+    <div>
+      <ul className="mb-3 flex flex-wrap gap-2">
+        {items.map((c) => (
+          <li key={c.id} className="flex items-center gap-1.5 rounded-full bg-muted-bg px-3 py-1 text-sm">
+            {c.name}
+            <form action={deleteExpenseCategory.bind(null, c.id)}>
+              <button type="submit" aria-label={`Delete ${c.name}`} className="cursor-pointer text-muted hover:text-destructive">
+                <X size={13} />
+              </button>
+            </form>
+          </li>
+        ))}
+      </ul>
+      <form action={action} className="flex items-end gap-2">
+        <div className="flex-1">
+          <label className={labelClass}>New expense category</label>
+          <input name="name" required placeholder="e.g. Security" className={inputClass} />
+        </div>
+        <button type="submit" disabled={pending} className={buttonClass}>{pending ? "Adding…" : "Add"}</button>
+      </form>
+      {state.error && <p className="mt-1 text-sm text-destructive">{state.error}</p>}
+      <p className="mt-1 text-xs text-muted">Categories with recorded expenses are kept for history and can&apos;t be deleted.</p>
+    </div>
+  );
+}
 
 type Option = { id: string; name: string };
 

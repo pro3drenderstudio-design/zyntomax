@@ -34,12 +34,14 @@ export async function createPayrollRun(siteId: string): Promise<void> {
     });
 
     for (const e of earnings) {
+      const earned = e.commissionAmount + e.baseAmount;
+
       // Outstanding advances, oldest first
       const advances = await tx.salaryAdvance.findMany({
         where: { staffId: e.staffId },
         orderBy: { createdAt: "asc" },
       });
-      let deductible = (e.amount * capPct) / 100;
+      let deductible = (earned * capPct) / 100;
       let deducted = 0;
       for (const adv of advances) {
         const outstanding = Number(adv.amount) - Number(adv.repaidAmount);
@@ -57,15 +59,35 @@ export async function createPayrollRun(siteId: string): Promise<void> {
         deductible -= take;
       }
 
-      await tx.payrollItem.create({
+      // Discrepancy charge-backs assigned to this staff this period
+      const chargeAgg = await tx.discrepancyCharge.aggregate({
+        _sum: { amount: true },
+        where: { staffId: e.staffId, payrollItemId: null },
+      });
+      const discrepancyDeduction = Math.min(
+        Number(chargeAgg._sum.amount ?? 0),
+        Math.max(0, earned - deducted), // never push net below zero
+      );
+
+      const item = await tx.payrollItem.create({
         data: {
           runId: run.id,
           staffId: e.staffId,
-          earnedAmount: Math.round(e.amount * 100) / 100,
+          commissionAmount: Math.round(e.commissionAmount * 100) / 100,
+          baseAmount: Math.round(e.baseAmount * 100) / 100,
+          earnedAmount: Math.round(earned * 100) / 100,
           advanceDeduction: Math.round(deducted * 100) / 100,
-          netAmount: Math.round((e.amount - deducted) * 100) / 100,
+          discrepancyDeduction: Math.round(discrepancyDeduction * 100) / 100,
+          netAmount: Math.round((earned - deducted - discrepancyDeduction) * 100) / 100,
         },
       });
+      // Mark charged discrepancies as settled on this payslip
+      if (discrepancyDeduction > 0) {
+        await tx.discrepancyCharge.updateMany({
+          where: { staffId: e.staffId, payrollItemId: null },
+          data: { payrollItemId: item.id },
+        });
+      }
       await tx.job.updateMany({
         where: { id: { in: e.jobIds } },
         data: { payrollRunId: run.id },
