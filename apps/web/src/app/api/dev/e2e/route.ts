@@ -5,7 +5,7 @@ import { releaseBatch } from "@/app/(app)/payouts/actions";
 import { createPurchaseBatch, scaleInBatch } from "@/app/(app)/purchases/actions";
 import { createJob, completeJob } from "@/app/(app)/production/actions";
 import { createPayrollRun } from "@/app/(app)/payroll/actions";
-import { createOrder, createDispatch, recordCustomerPayment } from "@/app/(app)/orders/actions";
+import { recordSale, recordCustomerPayment } from "@/app/(app)/orders/actions";
 import { locationBalances } from "@/lib/inventory";
 
 /**
@@ -146,26 +146,21 @@ export async function GET() {
   if (run.items.length === 0) return fail("payroll produced no items");
   log.push(`Payroll run opened: ${run.items.length} staff, ₦${totalWages.toLocaleString()} earned`);
 
-  // ── 5. Sales: order → dispatch → invoice → payment ────────────────
+  // ── 5. Sales: record sale (deducts finished goods) → invoice → payment ──
   const product = await prisma.product.findUniqueOrThrow({ where: { name: "PET Pellets" } });
   await swallowRedirect(() =>
-    createOrder({}, fd({
+    recordSale({}, fd({
       customerId: customer.id,
       siteId: site.id,
+      kind: ["inventory"],
       productId: [product.id],
+      description: [""],
       qtyKg: ["200"],
+      unitPrice: ["950"],
     })),
   );
   const order = await prisma.salesOrder.findFirstOrThrow({ orderBy: { createdAt: "desc" } });
-  r = await createDispatch({}, fd({
-    orderId: order.id,
-    vehicle: "Truck LSD-889-KJA",
-    driverName: "Musa Danjuma",
-    productId: [product.id],
-    weightKg: ["200"],
-  }));
-  if (r.error) return fail(`dispatch: ${r.error}`);
-  const invoice = await prisma.invoice.findFirstOrThrow({ orderBy: { createdAt: "desc" } });
+  const invoice = await prisma.invoice.findFirstOrThrow({ where: { salesOrderId: order.id } });
   r = await recordCustomerPayment({}, fd({
     invoiceId: invoice.id,
     amount: "100000",
@@ -173,7 +168,7 @@ export async function GET() {
     reference: "FBN/TRF/0091",
   }));
   if (r.error) return fail(`payment: ${r.error}`);
-  log.push(`Order ${order.orderNo} → dispatched 200kg → ${invoice.invoiceNo} ₦${Number(invoice.amount).toLocaleString()} → ₦100,000 received`);
+  log.push(`Sale ${order.orderNo} → 200kg deducted → ${invoice.invoiceNo} ₦${Number(invoice.amount).toLocaleString()} → ₦100,000 received`);
 
   // ── Invariant checks ───────────────────────────────────────────────
   const balances = await locationBalances(null);

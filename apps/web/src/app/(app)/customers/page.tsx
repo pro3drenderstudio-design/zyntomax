@@ -12,7 +12,8 @@ export default async function CustomersPage() {
       include: {
         orders: {
           include: {
-            dispatches: { include: { invoice: { include: { payments: true } } } },
+            items: true,
+            invoice: { include: { payments: true } },
           },
         },
       },
@@ -44,26 +45,38 @@ export default async function CustomersPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <Table headers={["Customer", "Contact", "Terms", "Orders", "Open balance"]}>
+          <Table headers={["Customer", "Contact", "Terms", "Sales", "Lifetime value", "Sold (kg)", "Last sale", "Open balance"]}>
             {customers.map((c) => {
-              const invoices = c.orders.flatMap((o) =>
-                o.dispatches.flatMap((d) => (d.invoice ? [d.invoice] : [])),
-              );
+              const invoices = c.orders.flatMap((o) => (o.invoice ? [o.invoice] : []));
               const owed = invoices.reduce(
-                (s, inv) =>
-                  s + Number(inv.amount) - inv.payments.reduce((x, p) => x + Number(p.amount), 0),
+                (s, inv) => s + Number(inv.amount) - inv.payments.reduce((x, p) => x + Number(p.amount), 0),
                 0,
               );
+              const lifetime = c.orders.reduce(
+                (s, o) => s + o.items.reduce((x, i) => x + Number(i.qtyKg) * Number(i.unitPrice), 0),
+                0,
+              );
+              const soldKg = c.orders.reduce(
+                (s, o) => s + o.items.filter((i) => i.isInventory).reduce((x, i) => x + Number(i.qtyKg), 0),
+                0,
+              );
+              const lastSale = c.orders.reduce<Date | null>(
+                (latest, o) => (!latest || o.createdAt > latest ? o.createdAt : latest),
+                null,
+              );
               return (
-                <tr key={c.id}>
+                <tr key={c.id} className="hover:bg-muted-bg">
                   <td className="px-3 py-2 font-medium">{c.name}</td>
                   <td className="px-3 py-2 text-muted">
                     {c.contactName ?? "—"}{c.phone ? ` · ${c.phone}` : ""}
                   </td>
                   <td className="px-3 py-2">
-                    {c.creditTermsDays === 0 ? "On dispatch" : `${c.creditTermsDays} days`}
+                    {c.creditTermsDays === 0 ? "On sale" : `${c.creditTermsDays} days`}
                   </td>
                   <td className="tabular px-3 py-2">{c.orders.length}</td>
+                  <td className="tabular px-3 py-2">{formatNaira(lifetime)}</td>
+                  <td className="tabular px-3 py-2">{formatKg(soldKg)}</td>
+                  <td className="px-3 py-2 text-muted">{lastSale ? lastSale.toLocaleDateString("en-NG") : "—"}</td>
                   <td className={`tabular px-3 py-2 font-medium ${owed > 0 ? "text-warning" : ""}`}>
                     {formatNaira(owed)}
                   </td>

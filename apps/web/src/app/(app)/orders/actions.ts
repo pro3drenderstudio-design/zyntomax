@@ -28,173 +28,138 @@ async function nextNumber(prefix: string, count: number): Promise<string> {
   return `${prefix}-${ymd}-${String(count + 1).padStart(3, "0")}`;
 }
 
-export async function createOrder(
+/**
+ * Record a sale in one step (no separate dispatch):
+ *  - inventory lines deduct finished goods (product → customer location)
+ *  - non-inventory lines are pure revenue (e.g. scrap sold, service)
+ *  - each line has a custom unit price
+ *  - an invoice is generated immediately
+ */
+export async function recordSale(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
   const session = await requireRole(["SALES_ADMIN", "OPERATIONS_MANAGER"]);
   const customerId = String(formData.get("customerId") ?? "");
   const siteId = String(formData.get("siteId") ?? "");
+  const markPaid = formData.get("markPaid") === "on";
   if (!customerId || !siteId) return { error: "Pick a customer and site." };
 
+  const kinds = formData.getAll("kind").map(String); // "inventory" | "other"
   const productIds = formData.getAll("productId").map(String);
+  const descriptions = formData.getAll("description").map(String);
   const qtys = formData.getAll("qtyKg").map(Number);
-  const lines = productIds
-    .map((p, i) => ({ productId: p, qtyKg: qtys[i] }))
-    .filter((l) => l.productId && l.qtyKg > 0);
-  if (lines.length === 0) return { error: "Add at least one product line." };
+  const prices = formData.getAll("unitPrice").map(Number);
 
-  // Price snapshot: customer override wins over list price
-  const items: { productId: string; qtyKg: number; unitPrice: number }[] = [];
-  for (const line of lines) {
-    const price = await prisma.priceList.findFirst({
-      where: {
-        productId: line.productId,
-        effectiveFrom: { lte: new Date() },
-        OR: [{ customerId }, { customerId: null }],
-      },
-      orderBy: [{ customerId: { sort: "desc", nulls: "last" } }, { effectiveFrom: "desc" }],
-    });
-    if (!price) return { error: "A product on this order has no price set." };
-    items.push({ ...line, unitPrice: Number(price.pricePerKg) });
+  type Line = {
+    isInventory: boolean;
+    productId: string | null;
+    description: string | null;
+    qtyKg: number;
+    unitPrice: number;
+  };
+  const lines: Line[] = [];
+  for (let i = 0; i < kinds.length; i++) {
+    const isInv = kinds[i] === "inventory";
+    const qty = qtys[i];
+    const price = prices[i];
+    if (isInv) {
+      if (!productIds[i] || !(qty > 0) || !(price >= 0)) continue;
+      lines.push({ isInventory: true, productId: productIds[i], description: null, qtyKg: qty, unitPrice: price });
+    } else {
+      const desc = (descriptions[i] ?? "").trim();
+      if (!desc || !(price > 0)) continue;
+      // non-inventory: qty defaults to 1, price is the line amount
+      lines.push({ isInventory: false, productId: null, description: desc, qtyKg: qty > 0 ? qty : 1, unitPrice: price });
+    }
   }
+  if (lines.length === 0) return { error: "Add at least one valid sale line." };
 
-  const order = await prisma.salesOrder.create({
-    data: {
-      siteId,
-      customerId,
-      orderNo: await nextNumber("SO", await prisma.salesOrder.count()),
-      status: "CONFIRMED",
-      createdById: session.userId,
-      items: { create: items },
-    },
-  });
-
-  await audit({
-    actorId: session.userId,
-    action: "order.create",
-    entity: "SalesOrder",
-    entityId: order.id,
-    after: { orderNo: order.orderNo, items },
-  });
-
-  revalidatePath("/orders");
-  redirect(`/orders/${order.id}`);
-}
-
-export async function createDispatch(
-  _prev: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const session = await requireRole(["SALES_ADMIN", "FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"]);
-  const orderId = String(formData.get("orderId") ?? "");
-  const vehicle = String(formData.get("vehicle") ?? "").trim() || undefined;
-  const driverName = String(formData.get("driverName") ?? "").trim() || undefined;
-
-  const order = await prisma.salesOrder.findUniqueOrThrow({
-    where: { id: orderId },
-    include: { customer: true, items: true, dispatches: { include: { items: true } } },
-  });
-  if (!["CONFIRMED", "PARTIALLY_DISPATCHED"].includes(order.status)) {
-    return { error: "This order is not open for dispatch." };
-  }
-
-  const productIds = formData.getAll("productId").map(String);
-  const weights = formData.getAll("weightKg").map(Number);
-  const lines = productIds
-    .map((p, i) => ({ productId: p, weightKg: weights[i] }))
-    .filter((l) => l.productId && l.weightKg > 0);
-  if (lines.length === 0) return { error: "Enter the scaled weight for at least one product." };
-
-  // Stock check per product
-  for (const line of lines) {
-    const available = await productBalance(order.siteId, line.productId);
-    if (available < line.weightKg) {
-      return { error: `Only ${available.toFixed(1)} kg of a product is in the finished goods store.` };
+  // Stock check for inventory lines
+  for (const l of lines) {
+    if (l.isInventory && l.productId) {
+      const available = await productBalance(siteId, l.productId);
+      if (available < l.qtyKg) {
+        const p = await prisma.product.findUnique({ where: { id: l.productId } });
+        return { error: `Only ${available.toFixed(1)} kg of ${p?.name ?? "product"} is in finished goods.` };
+      }
     }
   }
 
-  const store = await prisma.inventoryLocation.findFirstOrThrow({
-    where: { siteId: order.siteId, kind: "FINISHED_STORE" },
-  });
-  const customerLoc = await prisma.inventoryLocation.findFirstOrThrow({
-    where: { siteId: order.siteId, kind: "CUSTOMER" },
-  });
+  const customer = await prisma.customer.findUniqueOrThrow({ where: { id: customerId } });
+  const total = lines.reduce((s, l) => s + l.qtyKg * l.unitPrice, 0);
+  const store = await prisma.inventoryLocation.findFirst({ where: { siteId, kind: "FINISHED_STORE" } });
+  const customerLoc = await prisma.inventoryLocation.findFirst({ where: { siteId, kind: "CUSTOMER" } });
 
-  // Invoice amount uses the order's unit prices on the dispatched weight
-  const priceOf = new Map(order.items.map((i) => [i.productId, Number(i.unitPrice)]));
-  let amount = 0;
-  for (const line of lines) {
-    const unit = priceOf.get(line.productId);
-    if (unit === undefined) return { error: "A dispatched product is not on this order." };
-    amount += unit * line.weightKg;
-  }
-
-  await prisma.$transaction(async (tx) => {
-    const dispatch = await tx.dispatch.create({
+  const order = await prisma.$transaction(async (tx) => {
+    const so = await tx.salesOrder.create({
       data: {
-        orderId,
-        waybillNo: await nextNumber("WB", await tx.dispatch.count()),
-        vehicle,
-        driverName,
-        status: "DEPARTED",
-        items: { create: lines },
+        siteId,
+        customerId,
+        orderNo: await nextNumber("SALE", await tx.salesOrder.count()),
+        status: "CLOSED",
+        createdById: session.userId,
+        items: {
+          create: lines.map((l) => ({
+            productId: l.productId,
+            description: l.description,
+            isInventory: l.isInventory,
+            qtyKg: l.qtyKg,
+            unitPrice: l.unitPrice,
+          })),
+        },
       },
     });
 
-    for (const line of lines) {
-      await tx.inventoryMovement.create({
-        data: {
-          fromLocationId: store.id,
-          toLocationId: customerLoc.id,
-          productId: line.productId,
-          weightKg: line.weightKg,
-          refType: "DISPATCH",
-          refId: dispatch.id,
-          byId: session.userId,
-          note: "Dispatched to customer",
-        },
-      });
+    // Deduct finished goods for inventory lines
+    for (const l of lines) {
+      if (l.isInventory && l.productId && store && customerLoc) {
+        await tx.inventoryMovement.create({
+          data: {
+            fromLocationId: store.id,
+            toLocationId: customerLoc.id,
+            productId: l.productId,
+            weightKg: l.qtyKg,
+            refType: "DISPATCH",
+            refId: so.id,
+            byId: session.userId,
+            note: "Sold to customer",
+          },
+        });
+      }
     }
 
     const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + order.customer.creditTermsDays);
-    await tx.invoice.create({
+    dueDate.setDate(dueDate.getDate() + customer.creditTermsDays);
+    const invoice = await tx.invoice.create({
       data: {
-        dispatchId: dispatch.id,
+        salesOrderId: so.id,
         invoiceNo: await nextNumber("INV", await tx.invoice.count()),
-        amount: Math.round(amount * 100) / 100,
+        amount: Math.round(total * 100) / 100,
         dueDate,
+        status: markPaid ? "PAID" : "UNPAID",
       },
     });
-
-    // Order status: compare total dispatched (incl. this one) vs ordered
-    const orderedKg = order.items.reduce((s, i) => s + Number(i.qtyKg), 0);
-    const previouslyDispatched = order.dispatches
-      .flatMap((d) => d.items)
-      .reduce((s, i) => s + Number(i.weightKg), 0);
-    const nowDispatched = previouslyDispatched + lines.reduce((s, l) => s + l.weightKg, 0);
-    await tx.salesOrder.update({
-      where: { id: orderId },
-      data: {
-        status: nowDispatched >= orderedKg * 0.99 ? "DISPATCHED" : "PARTIALLY_DISPATCHED",
-      },
-    });
+    if (markPaid) {
+      await tx.customerPayment.create({
+        data: { invoiceId: invoice.id, amount: Math.round(total * 100) / 100, method: "CASH", receivedById: session.userId },
+      });
+    }
+    return so;
   });
 
   await audit({
     actorId: session.userId,
-    action: "dispatch.create",
+    action: "sale.record",
     entity: "SalesOrder",
-    entityId: orderId,
-    after: { lines, amount },
+    entityId: order.id,
+    after: { total, lines: lines.length },
   });
 
-  revalidatePath(`/orders/${orderId}`);
-  revalidatePath("/dispatches");
+  revalidatePath("/orders");
   revalidatePath("/invoices");
   revalidatePath("/inventory");
-  return {};
+  redirect(`/orders/${order.id}`);
 }
 
 export async function recordCustomerPayment(
@@ -212,7 +177,6 @@ export async function recordCustomerPayment(
     where: { id: invoiceId },
     include: { payments: true },
   });
-
   const paid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0) + amount;
 
   await prisma.$transaction([

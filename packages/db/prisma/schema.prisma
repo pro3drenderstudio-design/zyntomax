@@ -946,19 +946,22 @@ model SalesOrder {
   customer   Customer         @relation(fields: [customerId], references: [id])
   items      SalesOrderItem[]
   dispatches Dispatch[]
+  invoice    Invoice?
 
   @@index([siteId, status])
 }
 
 model SalesOrderItem {
-  id         String  @id @default(cuid())
-  orderId    String
-  productId  String
-  qtyKg      Decimal @db.Decimal(10, 2)
-  unitPrice  Decimal @db.Decimal(12, 2) // snapshot from price list
+  id          String  @id @default(cuid())
+  orderId     String
+  productId   String? // null for non-inventory sales
+  description String? // used for non-inventory lines
+  isInventory Boolean @default(true)
+  qtyKg       Decimal @db.Decimal(10, 2)
+  unitPrice   Decimal @db.Decimal(12, 2) // custom per sale (defaults from price list)
 
   order   SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product    @relation(fields: [productId], references: [id])
+  product Product?   @relation(fields: [productId], references: [id])
 }
 
 enum DispatchStatus {
@@ -1001,16 +1004,18 @@ enum InvoiceStatus {
 }
 
 model Invoice {
-  id         String        @id @default(cuid())
-  dispatchId String        @unique
-  invoiceNo  String        @unique
-  amount     Decimal       @db.Decimal(14, 2)
-  dueDate    DateTime
-  status     InvoiceStatus @default(UNPAID)
-  createdAt  DateTime      @default(now())
+  id           String        @id @default(cuid())
+  dispatchId   String?       @unique // legacy dispatch-based invoices
+  salesOrderId String?       @unique // direct-sale invoices (current flow)
+  invoiceNo    String        @unique
+  amount       Decimal       @db.Decimal(14, 2)
+  dueDate      DateTime
+  status       InvoiceStatus @default(UNPAID)
+  createdAt    DateTime      @default(now())
 
-  dispatch Dispatch          @relation(fields: [dispatchId], references: [id])
-  payments CustomerPayment[]
+  dispatch   Dispatch?         @relation(fields: [dispatchId], references: [id])
+  salesOrder SalesOrder?       @relation(fields: [salesOrderId], references: [id])
+  payments   CustomerPayment[]
 }
 
 model CustomerPayment {

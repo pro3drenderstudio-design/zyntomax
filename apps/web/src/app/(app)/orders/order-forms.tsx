@@ -1,138 +1,135 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createOrder, createDispatch, type FormState } from "./actions";
+import { recordSale, type FormState } from "./actions";
 import { inputClass, labelClass, buttonClass, secondaryButtonClass } from "@/components/ui";
 import { Plus, Trash2 } from "lucide-react";
 
 type Option = { id: string; name: string };
+type ProductOption = { id: string; name: string; price: number };
+type Line = { key: number; kind: "inventory" | "other"; productId: string; description: string; qtyKg: string; unitPrice: string };
 
-export function OrderForm({
+let counter = 0;
+const newLine = (): Line => ({ key: counter++, kind: "inventory", productId: "", description: "", qtyKg: "", unitPrice: "" });
+
+export function SaleForm({
   customers,
   sites,
   products,
 }: {
   customers: Option[];
   sites: Option[];
-  products: Option[];
+  products: ProductOption[];
 }) {
-  const [state, formAction, pending] = useActionState<FormState, FormData>(
-    createOrder,
-    {},
-  );
-  const [rows, setRows] = useState([0]);
+  const [state, formAction, pending] = useActionState<FormState, FormData>(recordSale, {});
+  const [lines, setLines] = useState<Line[]>([newLine()]);
+
+  const update = (key: number, patch: Partial<Line>) =>
+    setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+
+  const total = lines.reduce((s, l) => s + (Number(l.qtyKg) || (l.kind === "other" ? 1 : 0)) * (Number(l.unitPrice) || 0), 0);
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label htmlFor="o-customer" className={labelClass}>Customer *</label>
-          <select id="o-customer" name="customerId" required className={inputClass} defaultValue="">
+          <label className={labelClass}>Customer *</label>
+          <select name="customerId" required className={inputClass} defaultValue="">
             <option value="" disabled>— Select customer —</option>
             {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div>
-          <label htmlFor="o-site" className={labelClass}>Site *</label>
-          <select id="o-site" name="siteId" required className={inputClass}>
+          <label className={labelClass}>Site *</label>
+          <select name="siteId" required className={inputClass}>
             {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
       </div>
 
-      {rows.map((rowId) => (
-        <div key={rowId} className="flex items-end gap-2">
-          <div className="flex-1">
-            <label className={labelClass}>Product</label>
-            <select name="productId" required className={inputClass} defaultValue="">
-              <option value="" disabled>— Select —</option>
-              {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Quantity (kg)</label>
-            <input name="qtyKg" type="number" step="1" min="1" required className={`${inputClass} w-32`} />
-          </div>
-          {rows.length > 1 && (
-            <button
-              type="button"
-              aria-label="Remove line"
-              onClick={() => setRows((r) => r.filter((x) => x !== rowId))}
-              className="cursor-pointer rounded-md p-2 text-muted hover:bg-destructive-soft hover:text-destructive"
-            >
-              <Trash2 size={15} />
-            </button>
-          )}
-        </div>
-      ))}
-
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setRows((r) => [...r, Math.max(...r) + 1])}
-          className={`${secondaryButtonClass} inline-flex items-center gap-1.5`}
-        >
-          <Plus size={14} aria-hidden /> Add product
-        </button>
-        <button type="submit" disabled={pending} className={buttonClass}>
-          {pending ? "Creating…" : "Create order"}
-        </button>
-      </div>
-
-      {state.error && <p role="alert" className="text-sm text-destructive">{state.error}</p>}
-      <p className="text-xs text-muted">
-        Prices are snapshotted from the current price list (customer overrides win).
-      </p>
-    </form>
-  );
-}
-
-export function DispatchForm({
-  orderId,
-  orderProducts,
-}: {
-  orderId: string;
-  orderProducts: Option[];
-}) {
-  const [state, formAction, pending] = useActionState<FormState, FormData>(
-    createDispatch,
-    {},
-  );
-
-  return (
-    <form action={formAction} className="flex flex-col gap-3">
-      <input type="hidden" name="orderId" value={orderId} />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label htmlFor="d-vehicle" className={labelClass}>Vehicle</label>
-          <input id="d-vehicle" name="vehicle" placeholder="Truck ABC-123-XY" className={inputClass} />
-        </div>
-        <div>
-          <label htmlFor="d-driver" className={labelClass}>Driver</label>
-          <input id="d-driver" name="driverName" className={inputClass} />
-        </div>
-      </div>
-
       <div className="flex flex-col gap-2">
-        {orderProducts.map((p) => (
-          <div key={p.id} className="flex items-center gap-3">
-            <input type="hidden" name="productId" value={p.id} />
-            <span className="w-44 text-sm">{p.name}</span>
-            <input
-              name="weightKg" type="number" step="0.1" min="0" defaultValue={0}
-              aria-label={`Dispatched kg of ${p.name}`}
-              className={`${inputClass} w-32`}
-            />
-            <span className="text-xs text-muted">kg scaled at gate</span>
+        {lines.map((l) => (
+          <div key={l.key} className="rounded-md border border-border p-2.5">
+            <input type="hidden" name="kind" value={l.kind} />
+            <div className="mb-2 flex gap-1">
+              {(["inventory", "other"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => update(l.key, { kind: k })}
+                  className={`cursor-pointer rounded-md px-2.5 py-1 text-xs font-medium ${l.kind === k ? "bg-accent-soft text-accent" : "bg-muted-bg text-muted"}`}
+                >
+                  {k === "inventory" ? "Finished goods" : "Other / non-inventory"}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              {l.kind === "inventory" ? (
+                <>
+                  <div className="min-w-40 flex-1">
+                    <label className="mb-0.5 block text-xs text-muted">Product</label>
+                    <select
+                      name="productId" value={l.productId}
+                      onChange={(e) => {
+                        const p = products.find((x) => x.id === e.target.value);
+                        update(l.key, { productId: e.target.value, unitPrice: l.unitPrice || (p ? String(p.price) : "") });
+                      }}
+                      className={`${inputClass} py-1.5`}
+                    >
+                      <option value="">— Select —</option>
+                      {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <input type="hidden" name="description" value="" />
+                  <div>
+                    <label className="mb-0.5 block text-xs text-muted">Qty (kg)</label>
+                    <input name="qtyKg" type="number" step="0.1" min="0" value={l.qtyKg} onChange={(e) => update(l.key, { qtyKg: e.target.value })} className={`${inputClass} w-28 py-1.5`} />
+                  </div>
+                  <div>
+                    <label className="mb-0.5 block text-xs text-muted">Price ₦/kg</label>
+                    <input name="unitPrice" type="number" step="0.01" min="0" value={l.unitPrice} onChange={(e) => update(l.key, { unitPrice: e.target.value })} className={`${inputClass} w-28 py-1.5`} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="min-w-40 flex-1">
+                    <label className="mb-0.5 block text-xs text-muted">Description</label>
+                    <input name="description" value={l.description} onChange={(e) => update(l.key, { description: e.target.value })} placeholder="e.g. Mixed scrap, delivery fee" className={`${inputClass} py-1.5`} />
+                  </div>
+                  <input type="hidden" name="productId" value="" />
+                  <input type="hidden" name="qtyKg" value="1" />
+                  <div>
+                    <label className="mb-0.5 block text-xs text-muted">Amount (₦)</label>
+                    <input name="unitPrice" type="number" step="0.01" min="0" value={l.unitPrice} onChange={(e) => update(l.key, { unitPrice: e.target.value })} className={`${inputClass} w-32 py-1.5`} />
+                  </div>
+                </>
+              )}
+              {lines.length > 1 && (
+                <button type="button" aria-label="Remove line" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} className="cursor-pointer rounded-md p-2 text-muted hover:bg-destructive-soft hover:text-destructive">
+                  <Trash2 size={15} />
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
 
-      {state.error && <p role="alert" className="text-sm text-destructive">{state.error}</p>}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button type="button" onClick={() => setLines((ls) => [...ls, newLine()])} className={`${secondaryButtonClass} inline-flex items-center gap-1.5`}>
+          <Plus size={14} aria-hidden /> Add line
+        </button>
+        <p className="tabular text-lg font-semibold">Total: ₦{total.toLocaleString("en-NG", { maximumFractionDigits: 2 })}</p>
+      </div>
 
+      <label className="flex cursor-pointer items-center gap-2 text-sm">
+        <input type="checkbox" name="markPaid" className="accent-[#008037]" /> Mark as paid now (cash sale)
+      </label>
+
+      {state.error && <p role="alert" className="text-sm text-destructive">{state.error}</p>}
       <button type="submit" disabled={pending} className={`${buttonClass} self-start`}>
-        {pending ? "Dispatching…" : "Dispatch & generate invoice"}
+        {pending ? "Recording…" : "Record sale"}
       </button>
+      <p className="text-xs text-muted">Finished-goods lines deduct stock automatically; an invoice is generated for the sale.</p>
     </form>
   );
 }

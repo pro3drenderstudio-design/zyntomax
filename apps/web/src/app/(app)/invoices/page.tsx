@@ -13,6 +13,7 @@ export default async function InvoicesPage() {
   const invoices = await prisma.invoice.findMany({
     include: {
       payments: true,
+      salesOrder: { include: { customer: true } },
       dispatch: { include: { order: { include: { customer: true } } } },
     },
     orderBy: { createdAt: "desc" },
@@ -25,7 +26,9 @@ export default async function InvoicesPage() {
     const open = Number(inv.amount) - paid;
     const daysOverdue =
       open > 0 ? Math.floor((now - inv.dueDate.getTime()) / 86400000) : 0;
-    return { inv, paid, open, daysOverdue };
+    const customer = inv.salesOrder?.customer ?? inv.dispatch?.order.customer;
+    const orderId = inv.salesOrderId ?? inv.dispatch?.orderId;
+    return { inv, paid, open, daysOverdue, customerName: customer?.name ?? "—", orderId };
   });
 
   const buckets = {
@@ -48,17 +51,17 @@ export default async function InvoicesPage() {
 
       <div className="mt-4">
         <Table headers={["Invoice", "Customer", "Amount", "Paid", "Due date", "Status", canRecord ? "Record payment" : ""]}>
-          {enriched.map(({ inv, paid, open, daysOverdue }) => {
+          {enriched.map(({ inv, paid, open, daysOverdue, customerName, orderId }) => {
             const displayStatus =
               open > 0 && daysOverdue > 0 ? "OVERDUE" : inv.status;
             return (
               <tr key={inv.id}>
                 <td className="px-3 py-2">
-                  <Link href={`/orders/${inv.dispatch.orderId}`} className="tabular font-medium hover:underline">
+                  <Link href={orderId ? `/orders/${orderId}` : "#"} className="tabular font-medium hover:underline">
                     {inv.invoiceNo}
                   </Link>
                 </td>
-                <td className="px-3 py-2">{inv.dispatch.order.customer.name}</td>
+                <td className="px-3 py-2">{customerName}</td>
                 <td className="tabular px-3 py-2">{formatNaira(Number(inv.amount))}</td>
                 <td className="tabular px-3 py-2">{formatNaira(paid)}</td>
                 <td className="px-3 py-2">

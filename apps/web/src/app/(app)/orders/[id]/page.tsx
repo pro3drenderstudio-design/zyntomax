@@ -2,11 +2,11 @@ import { notFound } from "next/navigation";
 import { prisma } from "@zyntomax/db";
 import { requireSession, hasRole } from "@/lib/auth";
 import {
-  PageHeader, Card, Table, Badge, statusTone, formatKg, formatNaira,
+  PageHeader, Card, Table, Badge, statusTone, StatCard, formatKg, formatNaira,
 } from "@/components/ui";
-import { DispatchForm } from "../order-forms";
+import { InvoicePaymentForm } from "../../invoices/payment-form";
 
-export default async function OrderDetailPage({
+export default async function SaleDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -19,95 +19,62 @@ export default async function OrderDetailPage({
     include: {
       customer: true,
       items: { include: { product: true } },
-      dispatches: {
-        include: {
-          items: { include: { product: true } },
-          invoice: { include: { payments: true } },
-        },
-        orderBy: { dispatchedAt: "desc" },
-      },
+      invoice: { include: { payments: true } },
     },
   });
   if (!order) notFound();
 
-  const canDispatch =
-    hasRole(session, ["SALES_ADMIN", "FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"], order.siteId) &&
-    ["CONFIRMED", "PARTIALLY_DISPATCHED"].includes(order.status);
+  const total = order.items.reduce((s, i) => s + Number(i.qtyKg) * Number(i.unitPrice), 0);
+  const inv = order.invoice;
+  const paid = inv?.payments.reduce((s, p) => s + Number(p.amount), 0) ?? 0;
+  const open = inv ? Number(inv.amount) - paid : 0;
+  const canRecord = hasRole(session, ["FINANCE_ADMIN", "SALES_ADMIN"]);
 
   return (
     <div>
       <PageHeader
         title={order.orderNo}
-        subtitle={`${order.customer.name} · ${order.createdAt.toLocaleDateString("en-NG")}`}
-        action={<Badge tone={statusTone(order.status)}>{order.status.replace(/_/g, " ")}</Badge>}
+        subtitle={`${order.customer.name} · ${order.createdAt.toLocaleString("en-NG")}`}
       />
 
-      <h2 className="mb-2 font-medium">Order lines</h2>
-      <Table headers={["Product", "Quantity", "Unit price", "Line total"]}>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="Sale total" value={formatNaira(total)} />
+        <StatCard label="Invoice" value={inv?.invoiceNo ?? "—"} />
+        <StatCard label="Paid" value={formatNaira(paid)} tone="accent" />
+        <StatCard label="Outstanding" value={formatNaira(open)} tone={open > 0 ? "warning" : "default"} />
+      </div>
+
+      <h2 className="mb-2 mt-6 font-medium">Sale lines</h2>
+      <Table headers={["Item", "Type", "Qty", "Unit price", "Line total"]}>
         {order.items.map((i) => (
           <tr key={i.id}>
-            <td className="px-3 py-2 font-medium">{i.product.name}</td>
-            <td className="tabular px-3 py-2">{formatKg(Number(i.qtyKg))}</td>
-            <td className="tabular px-3 py-2">{formatNaira(Number(i.unitPrice))}/kg</td>
-            <td className="tabular px-3 py-2 font-medium">
-              {formatNaira(Number(i.qtyKg) * Number(i.unitPrice))}
+            <td className="px-3 py-2 font-medium">{i.isInventory ? i.product?.name : i.description}</td>
+            <td className="px-3 py-2">
+              {i.isInventory ? <Badge tone="info">Finished goods</Badge> : <Badge tone="neutral">Non-inventory</Badge>}
             </td>
+            <td className="tabular px-3 py-2">{i.isInventory ? formatKg(Number(i.qtyKg)) : "—"}</td>
+            <td className="tabular px-3 py-2">{formatNaira(Number(i.unitPrice))}{i.isInventory ? "/kg" : ""}</td>
+            <td className="tabular px-3 py-2 font-medium">{formatNaira(Number(i.qtyKg) * Number(i.unitPrice))}</td>
           </tr>
         ))}
       </Table>
 
-      {canDispatch && (
+      {inv && (
         <Card className="mt-4">
-          <h2 className="mb-1 font-medium">New dispatch</h2>
-          <p className="mb-3 text-sm text-muted">
-            Scale each product at the gate — the invoice is generated on the scaled weight.
-          </p>
-          <DispatchForm
-            orderId={order.id}
-            orderProducts={order.items.map((i) => ({ id: i.productId, name: i.product.name }))}
-          />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium">
+                {inv.invoiceNo} · <Badge tone={statusTone(open > 0 ? (inv.dueDate < new Date() ? "OVERDUE" : "UNPAID") : "PAID")}>
+                  {open > 0 ? (inv.dueDate < new Date() ? "OVERDUE" : "UNPAID") : "PAID"}
+                </Badge>
+              </p>
+              <p className="tabular text-sm text-muted">
+                {formatNaira(paid)} of {formatNaira(Number(inv.amount))} · due {inv.dueDate.toLocaleDateString("en-NG")}
+              </p>
+            </div>
+            {canRecord && open > 0 && <InvoicePaymentForm invoiceId={inv.id} />}
+          </div>
         </Card>
-      )}
-
-      <h2 className="mb-2 mt-6 font-medium">Dispatches</h2>
-      {order.dispatches.length === 0 ? (
-        <Card><p className="py-4 text-center text-sm text-muted">Nothing dispatched yet.</p></Card>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {order.dispatches.map((d) => {
-            const paid = d.invoice?.payments.reduce((s, p) => s + Number(p.amount), 0) ?? 0;
-            return (
-              <Card key={d.id}>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium">
-                    <span className="tabular">{d.waybillNo}</span>
-                    <span className="ml-2 text-sm text-muted">
-                      {d.dispatchedAt.toLocaleString("en-NG")}
-                      {d.vehicle && ` · ${d.vehicle}`}
-                      {d.driverName && ` · ${d.driverName}`}
-                    </span>
-                  </p>
-                  {d.invoice && (
-                    <span className="flex items-center gap-2 text-sm">
-                      <span className="tabular">{d.invoice.invoiceNo}</span>
-                      <Badge tone={statusTone(d.invoice.status)}>{d.invoice.status}</Badge>
-                      <span className="tabular">
-                        {formatNaira(paid)} / {formatNaira(Number(d.invoice.amount))}
-                      </span>
-                    </span>
-                  )}
-                </div>
-                <ul className="flex flex-wrap gap-4 text-sm">
-                  {d.items.map((i) => (
-                    <li key={i.id} className="tabular">
-                      {i.product.name}: <strong>{formatKg(Number(i.weightKg))}</strong>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            );
-          })}
-        </div>
       )}
     </div>
   );

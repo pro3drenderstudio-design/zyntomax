@@ -16,7 +16,6 @@ import {
   Layers,
   Store,
   FileText,
-  Send,
   UserCog,
   Wallet,
   Receipt,
@@ -80,8 +79,7 @@ const SECTIONS: NavSection[] = [
     roles: ["SUPER_ADMIN", "SALES_ADMIN", "FINANCE_ADMIN", "AUDITOR"],
     items: [
       { href: "/customers", label: "Customers", icon: <Store size={16} /> },
-      { href: "/orders", label: "Sales Orders", icon: <FileText size={16} /> },
-      { href: "/dispatches", label: "Dispatches", icon: <Send size={16} /> },
+      { href: "/orders", label: "Sales", icon: <FileText size={16} /> },
       { href: "/invoices", label: "Invoices", icon: <Receipt size={16} /> },
     ],
   },
