@@ -53,6 +53,54 @@ export async function createStage(
   return {};
 }
 
+export async function setStagePayBasis(stageId: string, basis: "SCALE_IN" | "SCALE_OUT") {
+  const session = await requireRole(["OPERATIONS_MANAGER"]);
+  await prisma.processStage.update({ where: { id: stageId }, data: { payBasis: basis } });
+  await audit({
+    actorId: session.userId,
+    action: "stage.pay_basis",
+    entity: "ProcessStage",
+    entityId: stageId,
+    after: { basis },
+  });
+  revalidatePath("/materials");
+}
+
+export async function createStageOutput(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const session = await requireRole(["OPERATIONS_MANAGER"]);
+  const stageId = String(formData.get("stageId") ?? "");
+  const materialTypeId = String(formData.get("materialTypeId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim() || null;
+  if (!stageId || !materialTypeId || name.length < 2) {
+    return { error: "Pick a stage, input material and output name." };
+  }
+  await prisma.stageOutput.create({ data: { stageId, materialTypeId, name, color } });
+  await audit({
+    actorId: session.userId,
+    action: "stage_output.create",
+    entity: "StageOutput",
+    entityId: `${stageId}:${materialTypeId}`,
+    after: { name, color },
+  });
+  revalidatePath("/materials");
+  return {};
+}
+
+export async function deleteStageOutput(id: string) {
+  await requireRole(["OPERATIONS_MANAGER"]);
+  const used = await prisma.jobOutput.count({ where: { stageOutputId: id } });
+  if (used > 0) {
+    await prisma.stageOutput.update({ where: { id }, data: { active: false } });
+  } else {
+    await prisma.stageOutput.delete({ where: { id } });
+  }
+  revalidatePath("/materials");
+}
+
 /** Replace a material's route with an ordered list of stage ids. */
 export async function setRoute(
   _prev: FormState,

@@ -123,13 +123,29 @@ export async function completeJob(
   formData: FormData,
 ): Promise<FormState> {
   const session = await requireRole(["FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"]);
-  const parsed = completeSchema.safeParse(Object.fromEntries(formData.entries()));
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const { jobId, weightOutKg, wasteKg } = parsed.data;
+  const jobId = String(formData.get("jobId") ?? "");
+  const wasteKg = Number(formData.get("wasteKg") ?? 0);
 
   const job = await prisma.job.findUniqueOrThrow({ where: { id: jobId } });
   if (!["ASSIGNED", "IN_PROGRESS"].includes(job.status)) {
     return { error: "This job is not open." };
+  }
+
+  // Categorized outputs: repeated stageOutputId[] + outWeight[]. When a stage
+  // has defined outputs the form posts lines; otherwise a single weightOutKg.
+  const outputIds = formData.getAll("stageOutputId").map(String).filter(Boolean);
+  const outWeights = formData.getAll("outWeight").map(Number);
+  const outputLines = outputIds
+    .map((id, i) => ({ stageOutputId: id, weightKg: outWeights[i] }))
+    .filter((l) => l.weightKg > 0);
+
+  const weightOutKg =
+    outputLines.length > 0
+      ? outputLines.reduce((s, l) => s + l.weightKg, 0)
+      : Number(formData.get("weightOutKg") ?? 0);
+
+  if (Number.isNaN(wasteKg) || wasteKg < 0 || Number.isNaN(weightOutKg) || weightOutKg < 0) {
+    return { error: "Enter valid output and waste weights." };
   }
 
   const weightIn = Number(job.weightInKg);
@@ -140,6 +156,14 @@ export async function completeJob(
   const discrepancy = weightIn - accounted;
   const discrepancyPct = weightIn > 0 ? (discrepancy / weightIn) * 100 : 0;
   const beyondTolerance = Math.abs(discrepancyPct) > Number(job.toleranceSnapshot);
+
+  // Record the output composition (color-tagged breakdown) either way
+  if (outputLines.length > 0) {
+    await prisma.jobOutput.deleteMany({ where: { jobId } });
+    await prisma.jobOutput.createMany({
+      data: outputLines.map((l) => ({ jobId, stageOutputId: l.stageOutputId, weightKg: l.weightKg })),
+    });
+  }
 
   if (beyondTolerance) {
     await prisma.job.update({
@@ -182,13 +206,53 @@ export async function resolveJob(
   const session = await requireRole(["FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"]);
   const jobId = String(formData.get("jobId") ?? "");
   const reason = String(formData.get("reason") ?? "").trim();
+  const resolution = String(formData.get("resolution") ?? "OVERLOOK") as
+    | "OVERLOOK" | "CHARGE_SUPERVISOR" | "CHARGE_STAFF";
   if (!reason) return { error: "A resolution note is required for flagged jobs." };
 
-  const job = await prisma.job.findUniqueOrThrow({ where: { id: jobId } });
+  const job = await prisma.job.findUniqueOrThrow({
+    where: { id: jobId },
+    include: { assignments: true },
+  });
   if (job.status !== "FLAGGED") return { error: "This job is not flagged." };
 
   const discrepancy =
     Number(job.weightInKg) - Number(job.weightOutKg ?? 0) - Number(job.wasteKg ?? 0);
+
+  // Charge-back is valued at the material's cost per kg (latest vendor rate proxy).
+  if (resolution !== "OVERLOOK" && discrepancy > 0) {
+    const rate = await prisma.vendorRate.findFirst({
+      where: { materialTypeId: job.materialTypeId },
+      orderBy: { effectiveFrom: "desc" },
+    });
+    const unitCost = rate ? Number(rate.pricePerKg) : 0;
+    const chargeTotal = discrepancy * unitCost;
+
+    if (chargeTotal > 0) {
+      if (resolution === "CHARGE_SUPERVISOR") {
+        const supervisor = await prisma.staffProfile.findUnique({
+          where: { userId: session.userId },
+        });
+        if (supervisor) {
+          await prisma.discrepancyCharge.create({
+            data: { jobId, staffId: supervisor.id, amount: chargeTotal, reason },
+          });
+        }
+      } else {
+        // Split across assigned staff by their job share
+        for (const a of job.assignments) {
+          await prisma.discrepancyCharge.create({
+            data: {
+              jobId,
+              staffId: a.staffId,
+              amount: Math.round(chargeTotal * Number(a.share) * 100) / 100,
+              reason,
+            },
+          });
+        }
+      }
+    }
+  }
 
   await moveJobOutput(
     jobId,
@@ -197,17 +261,18 @@ export async function resolveJob(
     discrepancy,
     session.userId,
     "RESOLVED",
-    reason,
+    `${reason}${resolution !== "OVERLOOK" ? ` [${resolution === "CHARGE_SUPERVISOR" ? "charged supervisor" : "charged staff"}]` : ""}`,
   );
   await audit({
     actorId: session.userId,
     action: "job.resolve",
     entity: "Job",
     entityId: jobId,
-    after: { reason },
+    after: { reason, resolution },
   });
   revalidatePath("/production");
   revalidatePath("/inventory");
+  revalidatePath("/payroll");
   return {};
 }
 

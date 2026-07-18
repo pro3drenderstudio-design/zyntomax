@@ -120,6 +120,33 @@ async function main() {
     }
   }
 
+  // Stage outputs (dynamic, colour-tagged) + pay basis — demo
+  await prisma.processStage.update({
+    where: { id: stages["Sorting"].id },
+    data: { payBasis: "SCALE_IN" }, // sorters paid on what they're handed
+  });
+  const stageOutputDefs = [
+    { stage: "Sorting", material: "PET", name: "PET caps", color: "#3b82f6" },
+    { stage: "Sorting", material: "PET", name: "Pre-baled PET", color: "#22c55e" },
+    { stage: "Sorting", material: "General Plastics", name: "HDPE", color: "#f59e0b" },
+    { stage: "Sorting", material: "General Plastics", name: "PP", color: "#ef4444" },
+  ];
+  for (const o of stageOutputDefs) {
+    const exists = await prisma.stageOutput.findFirst({
+      where: { stageId: stages[o.stage].id, materialTypeId: materials[o.material].id, name: o.name },
+    });
+    if (!exists) {
+      await prisma.stageOutput.create({
+        data: {
+          stageId: stages[o.stage].id,
+          materialTypeId: materials[o.material].id,
+          name: o.name,
+          color: o.color,
+        },
+      });
+    }
+  }
+
   const productDefs = [
     { name: "PET Pellets", material: "PET", form: "pellets" },
     { name: "Plastic Pellets", material: "General Plastics", form: "pellets" },

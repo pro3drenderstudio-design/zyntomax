@@ -15,7 +15,7 @@ export default async function ProductionPage({
   const { status } = await searchParams;
   const canSupervise = hasRole(session, ["FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"]);
 
-  const [jobs, sites, stages, materials, staff] = await Promise.all([
+  const [jobs, sites, stages, materials, staff, routes, stageOutputs] = await Promise.all([
     prisma.job.findMany({
       where: {
         ...(siteIds ? { siteId: { in: siteIds } } : {}),
@@ -25,6 +25,7 @@ export default async function ProductionPage({
         stage: true,
         materialType: true,
         assignments: { include: { staff: { include: { user: true } } } },
+        outputs: { include: { stageOutput: true } },
       },
       orderBy: [{ status: "asc" }, { startedAt: "desc" }],
       take: 100,
@@ -37,7 +38,15 @@ export default async function ProductionPage({
       include: { user: true },
       orderBy: { staffNo: "asc" },
     }),
+    prisma.materialRoute.findMany({ select: { materialTypeId: true, stageId: true } }),
+    prisma.stageOutput.findMany({ where: { active: true } }),
   ]);
+
+  // outputs available for a given (stage, material)
+  const outputsFor = (stageId: string, materialTypeId: string) =>
+    stageOutputs
+      .filter((o) => o.stageId === stageId && o.materialTypeId === materialTypeId)
+      .map((o) => ({ id: o.id, name: o.name, color: o.color }));
 
   const open = jobs.filter((j) => ["ASSIGNED", "IN_PROGRESS"].includes(j.status));
   const flagged = jobs.filter((j) => j.status === "FLAGGED");
@@ -58,6 +67,7 @@ export default async function ProductionPage({
             stages={stages.map((s) => ({ id: s.id, name: s.name }))}
             materials={materials.map((m) => ({ id: m.id, name: m.name }))}
             staff={staff.map((s) => ({ id: s.id, name: `${s.user.name} (${s.staffNo})` }))}
+            routes={routes}
           />
         </Card>
       )}
@@ -79,6 +89,16 @@ export default async function ProductionPage({
                 <p className="tabular mb-1 text-sm">
                   In {formatKg(Number(j.weightInKg))} → out {formatKg(Number(j.weightOutKg ?? 0))} + waste {formatKg(Number(j.wasteKg ?? 0))}
                 </p>
+                {j.outputs.length > 0 && (
+                  <div className="mb-1 flex flex-wrap gap-1.5">
+                    {j.outputs.map((o) => (
+                      <span key={o.id} className="inline-flex items-center gap-1 rounded-full bg-muted-bg px-2 py-0.5 text-xs">
+                        <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: o.stageOutput.color ?? "#cbd5e1" }} aria-hidden />
+                        {o.stageOutput.name}: {formatKg(Number(o.weightKg))}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <p className="mb-3 text-sm text-destructive">{j.flagReason}</p>
                 <p className="mb-3 text-xs text-muted">
                   {j.assignments.map((a) => a.staff.user.name).join(", ")}
@@ -110,7 +130,9 @@ export default async function ProductionPage({
                     {j.startedAt.toLocaleString("en-NG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
-                {canSupervise && <CompleteJobForm jobId={j.id} />}
+                {canSupervise && (
+                  <CompleteJobForm jobId={j.id} outputs={outputsFor(j.stageId, j.materialTypeId)} />
+                )}
               </div>
             </Card>
           ))}

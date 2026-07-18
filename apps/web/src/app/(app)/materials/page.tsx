@@ -3,17 +3,19 @@ import { requireSession } from "@/lib/auth";
 import { PageHeader, Card } from "@/components/ui";
 import { RouteEditor } from "./route-editor";
 import { CreateMaterialForm, CreateStageForm } from "./create-forms";
+import { StageManager } from "./stage-manager";
 
 export default async function MaterialsPage() {
   await requireSession();
 
-  const [materials, stages] = await Promise.all([
+  const [materials, stages, stageOutputs] = await Promise.all([
     prisma.materialType.findMany({
       where: { active: true },
       include: { routes: { orderBy: { sequence: "asc" } } },
       orderBy: { name: "asc" },
     }),
     prisma.processStage.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+    prisma.stageOutput.findMany({ where: { active: true } }),
   ]);
 
   return (
@@ -43,6 +45,21 @@ export default async function MaterialsPage() {
           </Card>
         ))}
       </div>
+
+      <h2 className="mb-2 mt-6 font-medium">Stage outputs & pay basis</h2>
+      <Card>
+        <StageManager
+          stages={stages.map((s) => ({ id: s.id, name: s.name, payBasis: s.payBasis }))}
+          materials={materials.map((m) => ({ id: m.id, name: m.name }))}
+          outputs={stageOutputs.map((o) => ({
+            id: o.id,
+            stageId: o.stageId,
+            materialTypeId: o.materialTypeId,
+            name: o.name,
+            color: o.color,
+          }))}
+        />
+      </Card>
     </div>
   );
 }
