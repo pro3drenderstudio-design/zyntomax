@@ -169,7 +169,7 @@ export function Sidebar({ roles }: { roles: string[] }) {
       <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-2 print:hidden lg:hidden">
         <span className="flex items-center gap-2 font-semibold">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Zyntomax" className="h-7 w-7 object-contain" />
+          <img src="/logo-icon.png" alt="Zyntomax" className="h-7 w-7 object-contain" />
           Zyntomax
         </span>
         <button
@@ -187,12 +187,12 @@ export function Sidebar({ roles }: { roles: string[] }) {
 
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface print:!hidden lg:flex">
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2.5 border-b border-border px-4 py-3.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Zyntomax" className="h-9 w-9 object-contain" />
+          <img src="/logo-icon.png" alt="Zyntomax" className="h-8 w-8 object-contain" />
           <div>
-            <p className="text-sm font-semibold leading-tight">Zyntomax</p>
-            <p className="text-[11px] text-muted">Operations</p>
+            <p className="text-[15px] font-bold leading-tight tracking-tight">Zyntomax</p>
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted">Operations</p>
           </div>
         </div>
         {nav}

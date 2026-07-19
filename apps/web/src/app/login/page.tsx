@@ -12,9 +12,10 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center gap-2">
+        <div className="mb-7 flex flex-col items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Zyntomax Ventures Limited" className="h-28 w-28 object-contain" />
+          <img src="/logo-icon.png" alt="Zyntomax Ventures Limited" className="h-16 w-16 object-contain" />
+          <p className="mt-3 text-2xl font-bold tracking-tight">Zyntomax</p>
           <p className="text-sm font-medium text-muted">Operations Platform</p>
         </div>
 

@@ -32,8 +32,8 @@ export default function LoginScreen() {
     >
       <View style={styles.logoWrap}>
         <Image
-          source={require("../assets/logo.png")}
-          style={{ width: 120, height: 120, resizeMode: "contain" }}
+          source={require("../assets/logo-icon.png")}
+          style={{ width: 76, height: 76, resizeMode: "contain" }}
         />
         <Text style={styles.title}>Zyntomax Field</Text>
         <Text style={styles.subtitle}>Collection & registration</Text>

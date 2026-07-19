@@ -38,7 +38,7 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={styles.logoWrap}>
-        <Image source={require("../assets/logo.png")} style={{ width: 120, height: 120, resizeMode: "contain" }} />
+        <Image source={require("../assets/logo-icon.png")} style={{ width: 76, height: 76, resizeMode: "contain" }} />
         <Text style={styles.title}>Zyntomax</Text>
         <Text style={styles.subtitle}>Recycle. Earn. Get rewarded.</Text>
       </View>
