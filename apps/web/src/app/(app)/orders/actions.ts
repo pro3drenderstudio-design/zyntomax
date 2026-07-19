@@ -2,26 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { prisma, Prisma } from "@zyntomax/db";
+import { prisma } from "@zyntomax/db";
 import { requireRole } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { sellableStock } from "@/lib/inventory";
 
 export type FormState = { error?: string };
-
-async function productBalance(siteId: string, productId: string): Promise<number> {
-  const rows = await prisma.$queryRaw<{ balance: number }[]>(Prisma.sql`
-    SELECT COALESCE(SUM(
-      CASE WHEN l.kind = 'FINISHED_STORE' AND mv."toLocationId" = l.id THEN mv."weightKg"
-           WHEN l.kind = 'FINISHED_STORE' AND mv."fromLocationId" = l.id THEN -mv."weightKg"
-           ELSE 0 END
-    ), 0) AS balance
-    FROM "InventoryMovement" mv
-    JOIN "InventoryLocation" l
-      ON l.id = mv."toLocationId" OR l.id = mv."fromLocationId"
-    WHERE mv."productId" = ${productId} AND l."siteId" = ${siteId}
-  `);
-  return Number(rows[0]?.balance ?? 0);
-}
 
 async function nextNumber(prefix: string, count: number): Promise<string> {
   const ymd = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -46,7 +32,7 @@ export async function recordSale(
   if (!customerId || !siteId) return { error: "Pick a customer and site." };
 
   const kinds = formData.getAll("kind").map(String); // "inventory" | "other"
-  const productIds = formData.getAll("productId").map(String);
+  const itemRefs = formData.getAll("itemRef").map(String); // "product:<id>" | "output:<id>"
   const descriptions = formData.getAll("description").map(String);
   const qtys = formData.getAll("qtyKg").map(Number);
   const prices = formData.getAll("unitPrice").map(Number);
@@ -54,6 +40,7 @@ export async function recordSale(
   type Line = {
     isInventory: boolean;
     productId: string | null;
+    stageOutputId: string | null;
     description: string | null;
     qtyKg: number;
     unitPrice: number;
@@ -64,25 +51,34 @@ export async function recordSale(
     const qty = qtys[i];
     const price = prices[i];
     if (isInv) {
-      if (!productIds[i] || !(qty > 0) || !(price >= 0)) continue;
-      lines.push({ isInventory: true, productId: productIds[i], description: null, qtyKg: qty, unitPrice: price });
+      const ref = itemRefs[i] ?? "";
+      const [kind, id] = ref.split(":");
+      if (!id || !(qty > 0) || !(price >= 0)) continue;
+      lines.push({
+        isInventory: true,
+        productId: kind === "product" ? id : null,
+        stageOutputId: kind === "output" ? id : null,
+        description: null,
+        qtyKg: qty,
+        unitPrice: price,
+      });
     } else {
       const desc = (descriptions[i] ?? "").trim();
       if (!desc || !(price > 0)) continue;
-      // non-inventory: qty defaults to 1, price is the line amount
-      lines.push({ isInventory: false, productId: null, description: desc, qtyKg: qty > 0 ? qty : 1, unitPrice: price });
+      lines.push({ isInventory: false, productId: null, stageOutputId: null, description: desc, qtyKg: qty > 0 ? qty : 1, unitPrice: price });
     }
   }
   if (lines.length === 0) return { error: "Add at least one valid sale line." };
 
-  // Stock check for inventory lines
+  // Stock check against live availability
+  const stock = await sellableStock([siteId]);
+  const availOf = new Map(stock.map((s) => [`${s.kind}:${s.id}`, s]));
   for (const l of lines) {
-    if (l.isInventory && l.productId) {
-      const available = await productBalance(siteId, l.productId);
-      if (available < l.qtyKg) {
-        const p = await prisma.product.findUnique({ where: { id: l.productId } });
-        return { error: `Only ${available.toFixed(1)} kg of ${p?.name ?? "product"} is in finished goods.` };
-      }
+    if (!l.isInventory) continue;
+    const key = l.productId ? `product:${l.productId}` : `stageOutput:${l.stageOutputId}`;
+    const item = availOf.get(key);
+    if (!item || item.availableKg < l.qtyKg) {
+      return { error: `Only ${(item?.availableKg ?? 0).toFixed(1)} kg of ${item?.name ?? "that item"} is available.` };
     }
   }
 
@@ -102,6 +98,7 @@ export async function recordSale(
         items: {
           create: lines.map((l) => ({
             productId: l.productId,
+            stageOutputId: l.stageOutputId,
             description: l.description,
             isInventory: l.isInventory,
             qtyKg: l.qtyKg,
@@ -111,14 +108,15 @@ export async function recordSale(
       },
     });
 
-    // Deduct finished goods for inventory lines
+    // Deduct finished goods for inventory lines (product or stage output)
     for (const l of lines) {
-      if (l.isInventory && l.productId && store && customerLoc) {
+      if (l.isInventory && (l.productId || l.stageOutputId) && store && customerLoc) {
         await tx.inventoryMovement.create({
           data: {
             fromLocationId: store.id,
             toLocationId: customerLoc.id,
             productId: l.productId,
+            stageOutputId: l.stageOutputId,
             weightKg: l.qtyKg,
             refType: "DISPATCH",
             refId: so.id,

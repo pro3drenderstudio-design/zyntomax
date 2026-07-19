@@ -56,13 +56,66 @@ export async function locationBalances(
   }));
 }
 
+export type SellableItem = {
+  kind: "product" | "stageOutput";
+  id: string;
+  name: string;
+  color: string | null;
+  siteId: string;
+  availableKg: number;
+};
+
+/**
+ * Everything currently available to sell from finished-goods stores:
+ * finished products and named stage outputs (sorted PP, HDPE, PET caps…),
+ * each with its available quantity. Used by the inventory view and to cap sales.
+ */
+export async function sellableStock(siteIds: string[] | null): Promise<SellableItem[]> {
+  const siteFilter = siteIds
+    ? Prisma.sql`AND l."siteId" IN (${Prisma.join(siteIds)})`
+    : Prisma.empty;
+
+  const products = await prisma.$queryRaw<
+    { id: string; name: string; siteId: string; bal: number }[]
+  >(Prisma.sql`
+    SELECT p.id, p.name, l."siteId",
+      SUM(CASE WHEN mv."toLocationId" = l.id THEN mv."weightKg"
+               WHEN mv."fromLocationId" = l.id THEN -mv."weightKg" ELSE 0 END) AS bal
+    FROM "InventoryMovement" mv
+    JOIN "Product" p ON p.id = mv."productId"
+    JOIN "InventoryLocation" l ON l.kind = 'FINISHED_STORE' AND (l.id = mv."toLocationId" OR l.id = mv."fromLocationId")
+    WHERE mv."productId" IS NOT NULL ${siteFilter}
+    GROUP BY p.id, p.name, l."siteId"
+    HAVING SUM(CASE WHEN mv."toLocationId" = l.id THEN mv."weightKg" WHEN mv."fromLocationId" = l.id THEN -mv."weightKg" ELSE 0 END) > 0.01
+  `);
+
+  const outputs = await prisma.$queryRaw<
+    { id: string; name: string; color: string | null; siteId: string; bal: number }[]
+  >(Prisma.sql`
+    SELECT so.id, so.name, so.color, l."siteId",
+      SUM(CASE WHEN mv."toLocationId" = l.id THEN mv."weightKg"
+               WHEN mv."fromLocationId" = l.id THEN -mv."weightKg" ELSE 0 END) AS bal
+    FROM "InventoryMovement" mv
+    JOIN "StageOutput" so ON so.id = mv."stageOutputId"
+    JOIN "InventoryLocation" l ON l.kind = 'FINISHED_STORE' AND (l.id = mv."toLocationId" OR l.id = mv."fromLocationId")
+    WHERE mv."stageOutputId" IS NOT NULL ${siteFilter}
+    GROUP BY so.id, so.name, so.color, l."siteId"
+    HAVING SUM(CASE WHEN mv."toLocationId" = l.id THEN mv."weightKg" WHEN mv."fromLocationId" = l.id THEN -mv."weightKg" ELSE 0 END) > 0.01
+  `);
+
+  return [
+    ...products.map((p) => ({ kind: "product" as const, id: p.id, name: p.name, color: null, siteId: p.siteId, availableKg: Number(p.bal) })),
+    ...outputs.map((o) => ({ kind: "stageOutput" as const, id: o.id, name: o.name, color: o.color, siteId: o.siteId, availableKg: Number(o.bal) })),
+  ];
+}
+
 /** Per material/product breakdown at one location. */
 export async function locationBreakdown(locationId: string) {
   const rows = await prisma.$queryRaw<
     { label: string; balance: number }[]
   >(Prisma.sql`
     SELECT
-      COALESCE(m.name, p.name, 'Unknown') AS label,
+      COALESCE(m.name, p.name, so.name, 'Unknown') AS label,
       SUM(
         CASE
           WHEN mv."toLocationId" = ${locationId} THEN mv."weightKg"
@@ -72,8 +125,9 @@ export async function locationBreakdown(locationId: string) {
     FROM "InventoryMovement" mv
     LEFT JOIN "MaterialType" m ON m.id = mv."materialTypeId"
     LEFT JOIN "Product" p ON p.id = mv."productId"
+    LEFT JOIN "StageOutput" so ON so.id = mv."stageOutputId"
     WHERE mv."toLocationId" = ${locationId} OR mv."fromLocationId" = ${locationId}
-    GROUP BY COALESCE(m.name, p.name, 'Unknown')
+    GROUP BY COALESCE(m.name, p.name, so.name, 'Unknown')
     HAVING SUM(
       CASE
         WHEN mv."toLocationId" = ${locationId} THEN mv."weightKg"

@@ -5,18 +5,19 @@ import {
   PageHeader, Card, Table, Badge, statusTone, formatKg, formatNaira,
 } from "@/components/ui";
 import { SaleForm } from "./order-forms";
+import { sellableStock } from "@/lib/inventory";
 
 export default async function SalesPage() {
   const session = await requireSession();
   const siteIds = accessibleSiteIds(session);
   const canCreate = hasRole(session, ["SALES_ADMIN", "OPERATIONS_MANAGER"]);
 
-  const [orders, customers, sites, products] = await Promise.all([
+  const [orders, customers, sites, products, stock] = await Promise.all([
     prisma.salesOrder.findMany({
       where: siteIds ? { siteId: { in: siteIds } } : {},
       include: {
         customer: true,
-        items: { include: { product: true } },
+        items: { include: { product: true, stageOutput: true } },
         invoice: { include: { payments: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -29,7 +30,20 @@ export default async function SalesPage() {
       include: { priceLists: { where: { customerId: null }, orderBy: { effectiveFrom: "desc" }, take: 1 } },
       orderBy: { name: "asc" },
     }),
+    sellableStock(siteIds),
   ]);
+
+  // Attach the current list price to each sellable product
+  const productPrice = new Map(
+    products.map((p) => [p.id, p.priceLists[0] ? Number(p.priceLists[0].pricePerKg) : 0]),
+  );
+  const sellable = stock.map((s) => ({
+    ref: `${s.kind}:${s.id}`,
+    name: s.kind === "stageOutput" ? `${s.name} (sorted)` : s.name,
+    availableKg: s.availableKg,
+    price: s.kind === "product" ? (productPrice.get(s.id) ?? 0) : 0,
+    color: s.color,
+  }));
 
   return (
     <div>
@@ -41,11 +55,7 @@ export default async function SalesPage() {
           <SaleForm
             customers={customers.map((c) => ({ id: c.id, name: c.name }))}
             sites={sites.map((s) => ({ id: s.id, name: s.name }))}
-            products={products.map((p) => ({
-              id: p.id,
-              name: p.name,
-              price: p.priceLists[0] ? Number(p.priceLists[0].pricePerKg) : 0,
-            }))}
+            items={sellable}
           />
         </Card>
       )}
@@ -66,7 +76,7 @@ export default async function SalesPage() {
               <td className="px-3 py-2">{o.createdAt.toLocaleDateString("en-NG")}</td>
               <td className="px-3 py-2">{o.customer.name}</td>
               <td className="px-3 py-2 text-sm text-muted">
-                {o.items.map((i) => i.isInventory ? i.product?.name : i.description).filter(Boolean).slice(0, 2).join(", ")}
+                {o.items.map((i) => i.isInventory ? (i.product?.name ?? i.stageOutput?.name) : i.description).filter(Boolean).slice(0, 2).join(", ")}
                 {o.items.length > 2 ? "…" : ""}
               </td>
               <td className="tabular px-3 py-2 font-medium">{formatNaira(total)}</td>

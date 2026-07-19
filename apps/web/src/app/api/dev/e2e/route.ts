@@ -153,7 +153,7 @@ export async function GET() {
       customerId: customer.id,
       siteId: site.id,
       kind: ["inventory"],
-      productId: [product.id],
+      itemRef: [`product:${product.id}`],
       description: [""],
       qtyKg: ["200"],
       unitPrice: ["950"],

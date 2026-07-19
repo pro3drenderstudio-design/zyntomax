@@ -314,17 +314,50 @@ async function moveJobOutput(
     }
 
     if (weightOutKg > 0) {
-      if (isLastStage) {
+      const jobOutputs = await tx.jobOutput.findMany({
+        where: { jobId },
+        include: { stageOutput: true },
+      });
+      const store = await tx.inventoryLocation.findFirstOrThrow({
+        where: { siteId: job.siteId, kind: "FINISHED_STORE" },
+      });
+
+      if (jobOutputs.length > 0) {
+        // Stage defines named outputs (e.g. sorted PP, HDPE): transform the
+        // input material into each output, held as stock in the finished store.
+        for (const o of jobOutputs) {
+          const w = Number(o.weightKg);
+          if (w <= 0) continue;
+          await tx.inventoryMovement.create({
+            data: {
+              fromLocationId: wip.id,
+              materialTypeId: job.materialTypeId,
+              weightKg: w,
+              refType: "JOB",
+              refId: jobId,
+              byId: actorId,
+              note: `Sorted into ${o.stageOutput.name}`,
+            },
+          });
+          await tx.inventoryMovement.create({
+            data: {
+              toLocationId: store.id,
+              stageOutputId: o.stageOutputId,
+              weightKg: w,
+              lotNo: job.lotNo,
+              refType: "JOB",
+              refId: jobId,
+              byId: actorId,
+              note: `Output: ${o.stageOutput.name}`,
+            },
+          });
+        }
+      } else if (isLastStage) {
         // Finished goods — convert material into its product
         const product = await tx.product.findFirst({
           where: { materialTypeId: job.materialTypeId, active: true },
         });
-        const store = await tx.inventoryLocation.findFirstOrThrow({
-          where: { siteId: job.siteId, kind: "FINISHED_STORE" },
-        });
         if (product) {
-          // Two entries so WIP is debited exactly once:
-          // material consumed out of WIP, product created into the store.
           await tx.inventoryMovement.create({
             data: {
               fromLocationId: wip.id,

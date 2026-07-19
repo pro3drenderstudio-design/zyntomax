@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@zyntomax/db";
 import { requireSession, accessibleSiteIds, hasRole } from "@/lib/auth";
 import {
@@ -81,9 +82,9 @@ export default async function ProductionPage({
             {flagged.map((j) => (
               <Card key={j.id} className="border-destructive">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium">
+                  <Link href={`/production/${j.id}`} className="font-medium hover:underline">
                     {j.stage.name} — {j.materialType.name}
-                  </p>
+                  </Link>
                   <Badge tone="destructive">FLAGGED</Badge>
                 </div>
                 <p className="tabular mb-1 text-sm">
@@ -121,9 +122,9 @@ export default async function ProductionPage({
             <Card key={j.id}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="font-medium">
+                  <Link href={`/production/${j.id}`} className="font-medium hover:underline">
                     {j.stage.name} — {j.materialType.name}
-                  </p>
+                  </Link>
                   <p className="tabular text-sm text-muted">
                     {formatKg(Number(j.weightInKg))} in ·{" "}
                     {j.assignments.map((a) => a.staff.user.name).join(", ")} · started{" "}
@@ -145,8 +146,10 @@ export default async function ProductionPage({
           const disc = Number(j.weightInKg) - Number(j.weightOutKg ?? 0) - Number(j.wasteKg ?? 0);
           const pct = Number(j.weightInKg) > 0 ? (disc / Number(j.weightInKg)) * 100 : 0;
           return (
-            <tr key={j.id}>
-              <td className="px-3 py-2">{j.stage.name}</td>
+            <tr key={j.id} className="hover:bg-muted-bg">
+              <td className="px-3 py-2">
+                <Link href={`/production/${j.id}`} className="font-medium hover:underline">{j.stage.name}</Link>
+              </td>
               <td className="px-3 py-2">{j.materialType.name}</td>
               <td className="tabular px-3 py-2">{formatKg(Number(j.weightInKg))}</td>
               <td className="tabular px-3 py-2">{formatKg(Number(j.weightOutKg ?? 0))}</td>
