@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@zyntomax/db";
 import { requireSession } from "@/lib/auth";
 import { PageHeader, Table, Card, formatKg, formatNaira, Badge } from "@/components/ui";
+import { supplierBalances } from "@/lib/suppliers";
 import { SupplierForm } from "./supplier-form";
 
 export default async function SuppliersPage() {
@@ -12,12 +13,12 @@ export default async function SuppliersPage() {
       include: {
         type: true,
         purchaseBatches: { include: { items: true } },
-        prepayments: true,
       },
       orderBy: { name: "asc" },
     }),
     prisma.supplierType.findMany({ orderBy: { name: "asc" } }),
   ]);
+  const balances = await supplierBalances(suppliers.map((s) => s.id));
 
   return (
     <div>
@@ -32,14 +33,12 @@ export default async function SuppliersPage() {
         <p className="mt-2 text-xs text-muted">Manage supplier types in Settings.</p>
       </Card>
 
-      <Table headers={["Supplier", "Type", "Contact", "Batches", "Total supplied", "Total value", "Prepaid bal."]}>
+      <Table headers={["Supplier", "Type", "Contact", "Batches", "Total supplied", "Delivered value", "Account balance"]}>
         {suppliers.map((s) => {
           const items = s.purchaseBatches.flatMap((b) => b.items);
           const kg = items.reduce((x, i) => x + Number(i.weightKg), 0);
-          const value = items.reduce((x, i) => x + Number(i.amount), 0);
-          const prepaid = s.prepayments.reduce((x, p) => x + Number(p.amount), 0);
-          // rough drawn-down = value of batches (paid or on account) — shown fully in detail
-          const balance = prepaid;
+          const acct = balances.get(s.id);
+          const bal = acct?.balance ?? 0;
           return (
             <tr key={s.id} className="hover:bg-muted-bg">
               <td className="px-3 py-2 font-medium">
@@ -51,8 +50,10 @@ export default async function SuppliersPage() {
               </td>
               <td className="tabular px-3 py-2">{s.purchaseBatches.length}</td>
               <td className="tabular px-3 py-2">{formatKg(kg)}</td>
-              <td className="tabular px-3 py-2">{formatNaira(value)}</td>
-              <td className="tabular px-3 py-2">{prepaid > 0 ? formatNaira(balance) : "—"}</td>
+              <td className="tabular px-3 py-2">{formatNaira(acct?.totalDelivered ?? 0)}</td>
+              <td className={`tabular px-3 py-2 font-medium ${bal < -0.01 ? "text-warning" : bal > 0.01 ? "text-accent" : "text-muted"}`}>
+                {Math.abs(bal) < 0.01 ? "Settled" : bal > 0 ? `${formatNaira(bal)} credit` : `${formatNaira(-bal)} owed`}
+              </td>
             </tr>
           );
         })}

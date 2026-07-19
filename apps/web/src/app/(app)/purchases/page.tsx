@@ -4,6 +4,7 @@ import { requireSession, accessibleSiteIds } from "@/lib/auth";
 import {
   PageHeader, Table, Badge, statusTone, PrimaryLink, EmptyState, formatKg, formatNaira,
 } from "@/components/ui";
+import { supplierAccount } from "@/lib/suppliers";
 import { Plus } from "lucide-react";
 
 export default async function PurchasesPage() {
@@ -16,6 +17,14 @@ export default async function PurchasesPage() {
     orderBy: { createdAt: "desc" },
     take: 100,
   });
+
+  // Derive each batch's settlement status from its supplier's account (FIFO)
+  const supplierIds = [...new Set(batches.map((b) => b.supplierId))];
+  const accounts = new Map(
+    await Promise.all(supplierIds.map(async (sid) => [sid, await supplierAccount(sid)] as const)),
+  );
+  const batchStatus = (b: (typeof batches)[number]) =>
+    accounts.get(b.supplierId)?.batches[b.id]?.status ?? "UNPAID";
 
   return (
     <div>
@@ -57,7 +66,7 @@ export default async function PurchasesPage() {
                 <td className="tabular px-3 py-2">{formatNaira(materialCost)}</td>
                 <td className="tabular px-3 py-2">{landed ? formatNaira(landed) : "—"}</td>
                 <td className="px-3 py-2">
-                  <Badge tone={statusTone(b.paymentStatus)}>{b.paymentStatus}</Badge>
+                  <Badge tone={statusTone(batchStatus(b))}>{batchStatus(b)}</Badge>
                 </td>
               </tr>
             );

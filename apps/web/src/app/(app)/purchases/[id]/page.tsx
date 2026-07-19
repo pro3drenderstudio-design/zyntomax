@@ -1,11 +1,13 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@zyntomax/db";
 import { requireSession, hasRole } from "@/lib/auth";
 import {
   PageHeader, Card, Badge, statusTone, Table, StatCard, formatKg, formatNaira,
 } from "@/components/ui";
+import { supplierAccount } from "@/lib/suppliers";
 import { ScaleInForm } from "./scale-in-form";
-import { PaymentForm } from "./payment-form";
+import { SupplierPaymentForm } from "../../suppliers/payment-form";
 
 export default async function PurchaseDetailPage({
   params,
@@ -20,26 +22,27 @@ export default async function PurchaseDetailPage({
     include: {
       supplier: true,
       items: { include: { materialType: true } },
-      supplierPayments: { orderBy: { paidAt: "desc" } },
       expenses: { include: { category: true } },
     },
   });
   if (!batch) notFound();
 
-  const materials = await prisma.materialType.findMany({
-    where: { active: true },
-    select: { id: true, name: true },
-  });
+  const [materials, account] = await Promise.all([
+    prisma.materialType.findMany({ where: { active: true }, select: { id: true, name: true } }),
+    supplierAccount(batch.supplierId),
+  ]);
 
   const scaledKg = batch.items.reduce((s, i) => s + Number(i.weightKg), 0);
   const materialCost = batch.items.reduce((s, i) => s + Number(i.amount), 0);
   const expenseCost = batch.expenses.reduce((s, e) => s + Number(e.amount), 0);
-  const paid = batch.supplierPayments.reduce((s, p) => s + Number(p.amount), 0);
   const landed = scaledKg > 0 ? (materialCost + expenseCost) / scaledKg : null;
   const estVariance =
     batch.fieldEstKg && scaledKg > 0
       ? ((Number(batch.fieldEstKg) - scaledKg) / Number(batch.fieldEstKg)) * 100
       : null;
+
+  const settlement = account.batches[batch.id];
+  const status = settlement?.status ?? "UNPAID";
 
   const canSupervise = hasRole(session, ["FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"], batch.siteId);
   const canPay = hasRole(session, ["FINANCE_ADMIN", "PURCHASING_MANAGER"], batch.siteId);
@@ -49,7 +52,7 @@ export default async function PurchaseDetailPage({
       <PageHeader
         title={batch.lotNo}
         subtitle={`${batch.supplier.name} · created ${batch.createdAt.toLocaleString("en-NG")}`}
-        action={<Badge tone={statusTone(batch.paymentStatus)}>{batch.paymentStatus}</Badge>}
+        action={<Badge tone={statusTone(status)}>{status}</Badge>}
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -65,19 +68,39 @@ export default async function PurchaseDetailPage({
           }
         />
         <StatCard label="Material cost" value={formatNaira(materialCost)} />
-        <StatCard label="Linked expenses" value={formatNaira(expenseCost)} hint="Logistics, loading…" />
+        <StatCard label="Landed cost" value={landed ? `${formatNaira(landed)}/kg` : "—"} tone="accent" />
         <StatCard
-          label="Landed cost"
-          value={landed ? `${formatNaira(landed)}/kg` : "—"}
-          tone="accent"
+          label="Covered by account"
+          value={formatNaira(settlement?.covered ?? 0)}
+          hint={materialCost > 0 ? `of ${formatNaira(materialCost)}` : undefined}
+          tone={settlement && settlement.outstanding <= 0.01 ? "accent" : "default"}
         />
         <StatCard
-          label="Paid to supplier"
-          value={formatNaira(paid)}
-          hint={materialCost > 0 ? `of ${formatNaira(materialCost)}` : undefined}
-          tone={paid >= materialCost && materialCost > 0 ? "accent" : "warning"}
+          label="Outstanding on batch"
+          value={formatNaira(settlement?.outstanding ?? materialCost)}
+          tone={(settlement?.outstanding ?? materialCost) > 0.01 ? "warning" : "default"}
         />
       </div>
+
+      {/* Supplier account context */}
+      <Card className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm">
+          <Link href={`/suppliers/${batch.supplierId}`} className="font-medium text-accent hover:underline">
+            {batch.supplier.name}
+          </Link>{" "}
+          account —{" "}
+          {account.credit > 0.01 ? (
+            <span className="text-accent">{formatNaira(account.credit)} prepaid credit available</span>
+          ) : account.owed > 0.01 ? (
+            <span className="text-warning">{formatNaira(account.owed)} owed to supplier</span>
+          ) : (
+            <span className="text-muted">settled</span>
+          )}
+        </p>
+        <p className="tabular text-xs text-muted">
+          Paid {formatNaira(account.totalPaid)} · Delivered {formatNaira(account.totalDelivered)}
+        </p>
+      </Card>
 
       {!batch.scaledInAt && canSupervise && (
         <Card className="mt-4">
@@ -118,32 +141,20 @@ export default async function PurchaseDetailPage({
               </tr>
             ))}
           </Table>
-          <p className="mt-1 text-xs text-muted">
-            Add more from the Expenses page and select this batch to tie the cost to it.
-          </p>
         </>
       )}
 
-      <h2 className="mb-2 mt-6 font-medium">Supplier payments</h2>
       {canPay && (
-        <Card className="mb-3">
-          <PaymentForm batchId={batch.id} />
-        </Card>
-      )}
-      {batch.supplierPayments.length === 0 ? (
-        <Card><p className="py-4 text-center text-sm text-muted">No payments recorded.</p></Card>
-      ) : (
-        <Table headers={["Date", "Amount", "Method", "Reference", "Type"]}>
-          {batch.supplierPayments.map((p) => (
-            <tr key={p.id}>
-              <td className="px-3 py-2">{p.paidAt.toLocaleDateString("en-NG")}</td>
-              <td className="tabular px-3 py-2 font-medium">{formatNaira(Number(p.amount))}</td>
-              <td className="px-3 py-2">{p.method}</td>
-              <td className="tabular px-3 py-2 text-xs">{p.reference ?? "—"}</td>
-              <td className="px-3 py-2">{p.isAdvance ? <Badge tone="info">Advance</Badge> : "Payment"}</td>
-            </tr>
-          ))}
-        </Table>
+        <>
+          <h2 className="mb-2 mt-6 font-medium">Pay supplier (against this batch)</h2>
+          <Card>
+            <SupplierPaymentForm supplierId={batch.supplierId} batchId={batch.id} submitLabel="Record payment" />
+            <p className="mt-2 text-xs text-muted">
+              Payments go to {batch.supplier.name}&apos;s account and settle deliveries oldest-first — any
+              existing advance already covers this batch automatically.
+            </p>
+          </Card>
+        </>
       )}
     </div>
   );

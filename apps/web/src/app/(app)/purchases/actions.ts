@@ -133,56 +133,5 @@ export async function scaleInBatch(
   return {};
 }
 
-const paymentSchema = z.object({
-  batchId: z.string().min(1),
-  amount: z.coerce.number().positive(),
-  method: z.enum(["TRANSFER", "CASH", "PAYSTACK"]),
-  reference: z.string().optional(),
-  isAdvance: z.coerce.boolean().optional(),
-});
-
-export async function addSupplierPayment(
-  _prev: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const session = await requireRole(["FINANCE_ADMIN", "PURCHASING_MANAGER"]);
-  const parsed = paymentSchema.safeParse({
-    ...Object.fromEntries(formData.entries()),
-    isAdvance: formData.get("isAdvance") === "on",
-  });
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const { batchId, amount, method, reference, isAdvance } = parsed.data;
-
-  const batch = await prisma.purchaseBatch.findUniqueOrThrow({
-    where: { id: batchId },
-    include: { items: true, supplierPayments: true },
-  });
-
-  const itemsTotal = batch.items.reduce((s, i) => s + Number(i.amount), 0);
-  const paidSoFar = batch.supplierPayments.reduce((s, p) => s + Number(p.amount), 0);
-  const newTotal = paidSoFar + amount;
-
-  await prisma.$transaction([
-    prisma.supplierPayment.create({
-      data: { batchId, amount, method, reference, isAdvance: isAdvance ?? false, paidById: session.userId },
-    }),
-    prisma.purchaseBatch.update({
-      where: { id: batchId },
-      data: {
-        paymentStatus:
-          itemsTotal > 0 && newTotal >= itemsTotal ? "PAID" : "PARTIAL",
-      },
-    }),
-  ]);
-
-  await audit({
-    actorId: session.userId,
-    action: "purchase.payment",
-    entity: "PurchaseBatch",
-    entityId: batchId,
-    after: { amount, method },
-  });
-
-  revalidatePath(`/purchases/${batchId}`);
-  return {};
-}
+// Supplier payments now go through the single supplier account —
+// see recordSupplierPayment in ../suppliers/actions.ts.

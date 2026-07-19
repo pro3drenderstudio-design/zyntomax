@@ -5,8 +5,9 @@ import { requireSession, hasRole } from "@/lib/auth";
 import {
   PageHeader, Card, Table, Badge, statusTone, StatCard, formatKg, formatNaira,
 } from "@/components/ui";
+import { supplierAccount } from "@/lib/suppliers";
 import { SupplierForm } from "../supplier-form";
-import { PrepayForm } from "./prepay-form";
+import { SupplierPaymentForm } from "../payment-form";
 
 export default async function SupplierDetailPage({
   params,
@@ -16,19 +17,17 @@ export default async function SupplierDetailPage({
   const session = await requireSession();
   const { id } = await params;
 
-  const [supplier, types] = await Promise.all([
+  const [supplier, types, account, payments] = await Promise.all([
     prisma.supplier.findUnique({
       where: { id },
       include: {
         type: true,
-        prepayments: { orderBy: { createdAt: "desc" } },
-        purchaseBatches: {
-          include: { items: true, supplierPayments: true },
-          orderBy: { createdAt: "desc" },
-        },
+        purchaseBatches: { include: { items: true }, orderBy: { createdAt: "desc" } },
       },
     }),
     prisma.supplierType.findMany({ orderBy: { name: "asc" } }),
+    supplierAccount(id),
+    prisma.supplierPayment.findMany({ where: { supplierId: id }, orderBy: { paidAt: "desc" } }),
   ]);
   if (!supplier) notFound();
 
@@ -37,32 +36,39 @@ export default async function SupplierDetailPage({
 
   const items = supplier.purchaseBatches.flatMap((b) => b.items);
   const totalKg = items.reduce((s, i) => s + Number(i.weightKg), 0);
-  const totalValue = items.reduce((s, i) => s + Number(i.amount), 0);
-  const prepaid = supplier.prepayments.reduce((s, p) => s + Number(p.amount), 0);
-  const directPaid = supplier.purchaseBatches
-    .flatMap((b) => b.supplierPayments)
-    .reduce((s, p) => s + Number(p.amount), 0);
-  // Prepayment balance = advances − (value of delivered batches settled against advances).
-  // Simplified: outstanding supplier credit = prepaid − (totalValue − directPaid).
-  const consumed = Math.max(0, totalValue - directPaid);
-  const prepaidBalance = prepaid - consumed;
+
+  // Unified statement: payments (credits) + deliveries (debits) by date
+  type Entry = { date: Date; label: string; credit: number; debit: number };
+  const statement: Entry[] = [
+    ...payments.map((p) => ({
+      date: p.paidAt,
+      label: `Payment${p.batchId ? " (against a batch)" : " / advance"}${p.note ? ` — ${p.note}` : ""} · ${p.method}`,
+      credit: Number(p.amount),
+      debit: 0,
+    })),
+    ...supplier.purchaseBatches
+      .filter((b) => b.scaledInAt)
+      .map((b) => ({
+        date: b.scaledInAt!,
+        label: `Delivery ${b.lotNo}`,
+        credit: 0,
+        debit: b.items.reduce((s, i) => s + Number(i.amount), 0),
+      })),
+  ].sort((a, b) => b.date.getTime() - a.date.getTime());
 
   return (
     <div>
-      <PageHeader
-        title={supplier.name}
-        subtitle={supplier.type?.name ?? "Unspecified type"}
-      />
+      <PageHeader title={supplier.name} subtitle={supplier.type?.name ?? "Unspecified type"} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Batches delivered" value={supplier.purchaseBatches.length} />
+        <StatCard label="Batches delivered" value={supplier.purchaseBatches.filter((b) => b.scaledInAt).length} />
         <StatCard label="Total supplied" value={formatKg(totalKg)} />
-        <StatCard label="Total value" value={formatNaira(totalValue)} />
+        <StatCard label="Delivered value" value={formatNaira(account.totalDelivered)} hint={`Paid ${formatNaira(account.totalPaid)}`} />
         <StatCard
-          label="Prepaid balance"
-          value={formatNaira(prepaidBalance)}
-          hint={prepaidBalance > 0 ? "Credit with supplier" : prepaidBalance < 0 ? "Owed to supplier" : undefined}
-          tone={prepaidBalance < 0 ? "warning" : "accent"}
+          label={account.balance >= 0 ? "Prepaid credit" : "Owed to supplier"}
+          value={formatNaira(Math.abs(account.balance))}
+          hint={account.balance > 0.01 ? "Covers future deliveries" : account.balance < -0.01 ? "Payable" : "Settled"}
+          tone={account.balance < -0.01 ? "warning" : "accent"}
         />
       </div>
 
@@ -78,19 +84,14 @@ export default async function SupplierDetailPage({
           </dl>
         </Card>
         <Card>
-          <h2 className="mb-2 text-sm font-medium">Upfront payments (advances)</h2>
-          {canPay && <div className="mb-3"><PrepayForm supplierId={supplier.id} /></div>}
-          {supplier.prepayments.length === 0 ? (
-            <p className="py-3 text-center text-sm text-muted">No advances recorded.</p>
+          <h2 className="mb-1 text-sm font-medium">Pay supplier / record advance</h2>
+          <p className="mb-3 text-xs text-muted">
+            One account. Advances (no batch) and batch payments both credit it; deliveries settle oldest-first.
+          </p>
+          {canPay ? (
+            <SupplierPaymentForm supplierId={supplier.id} submitLabel="Record payment" />
           ) : (
-            <ul className="flex flex-col gap-1 text-sm">
-              {supplier.prepayments.map((p) => (
-                <li key={p.id} className="flex items-center justify-between">
-                  <span className="text-muted">{p.createdAt.toLocaleDateString("en-NG")} · {p.method}{p.note ? ` · ${p.note}` : ""}</span>
-                  <span className="tabular font-medium">{formatNaira(Number(p.amount))}</span>
-                </li>
-              ))}
-            </ul>
+            <p className="text-sm text-muted">Only finance/purchasing can record payments.</p>
           )}
         </Card>
       </div>
@@ -117,22 +118,42 @@ export default async function SupplierDetailPage({
         </Card>
       )}
 
+      <h2 className="mb-2 mt-6 font-medium">Account statement</h2>
+      {statement.length === 0 ? (
+        <Card><p className="py-4 text-center text-sm text-muted">No account activity yet.</p></Card>
+      ) : (
+        <Table headers={["Date", "Detail", "Paid (credit)", "Delivered (debit)"]}>
+          {statement.map((e, i) => (
+            <tr key={i}>
+              <td className="px-3 py-2">{e.date.toLocaleDateString("en-NG")}</td>
+              <td className="px-3 py-2">{e.label}</td>
+              <td className="tabular px-3 py-2 text-accent">{e.credit > 0 ? formatNaira(e.credit) : "—"}</td>
+              <td className="tabular px-3 py-2 text-muted">{e.debit > 0 ? formatNaira(e.debit) : "—"}</td>
+            </tr>
+          ))}
+        </Table>
+      )}
+
       <h2 className="mb-2 mt-6 font-medium">Supply history</h2>
       {supplier.purchaseBatches.length === 0 ? (
         <Card><p className="py-4 text-center text-sm text-muted">No batches from this supplier yet.</p></Card>
       ) : (
-        <Table headers={["Lot", "Date", "Weight", "Value", "Payment"]}>
-          {supplier.purchaseBatches.map((b) => (
-            <tr key={b.id}>
-              <td className="px-3 py-2">
-                <Link href={`/purchases/${b.id}`} className="tabular font-medium hover:underline">{b.lotNo}</Link>
-              </td>
-              <td className="px-3 py-2">{b.createdAt.toLocaleDateString("en-NG")}</td>
-              <td className="tabular px-3 py-2">{formatKg(b.items.reduce((s, i) => s + Number(i.weightKg), 0))}</td>
-              <td className="tabular px-3 py-2">{formatNaira(b.items.reduce((s, i) => s + Number(i.amount), 0))}</td>
-              <td className="px-3 py-2"><Badge tone={statusTone(b.paymentStatus)}>{b.paymentStatus}</Badge></td>
-            </tr>
-          ))}
+        <Table headers={["Lot", "Date", "Weight", "Value", "Covered", "Settlement"]}>
+          {supplier.purchaseBatches.map((b) => {
+            const s = account.batches[b.id];
+            return (
+              <tr key={b.id}>
+                <td className="px-3 py-2">
+                  <Link href={`/purchases/${b.id}`} className="tabular font-medium hover:underline">{b.lotNo}</Link>
+                </td>
+                <td className="px-3 py-2">{b.createdAt.toLocaleDateString("en-NG")}</td>
+                <td className="tabular px-3 py-2">{formatKg(b.items.reduce((sum, i) => sum + Number(i.weightKg), 0))}</td>
+                <td className="tabular px-3 py-2">{formatNaira(s?.cost ?? 0)}</td>
+                <td className="tabular px-3 py-2">{formatNaira(s?.covered ?? 0)}</td>
+                <td className="px-3 py-2"><Badge tone={statusTone(s?.status ?? "UNPAID")}>{s?.status ?? "UNPAID"}</Badge></td>
+              </tr>
+            );
+          })}
         </Table>
       )}
     </div>

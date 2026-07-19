@@ -81,30 +81,38 @@ export async function updateSupplier(
   return { ok: "Saved." };
 }
 
-/** Prepayment: money advanced to a supplier before delivery (drawn down by batches). */
-export async function addPrepayment(
+/**
+ * Record a payment to a supplier — the single supplier account. Works from
+ * both the supplier page (advance, no batch) and the purchase page (payment
+ * in relation to a batch). Every payment is a credit to the account; batches
+ * settle against it FIFO, so advances automatically cover future deliveries.
+ */
+export async function recordSupplierPayment(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
   const session = await requireRole(["FINANCE_ADMIN", "PURCHASING_MANAGER"]);
   const supplierId = String(formData.get("supplierId") ?? "");
+  const batchId = String(formData.get("batchId") ?? "").trim() || undefined;
   const amount = Number(formData.get("amount"));
   const method = String(formData.get("method") ?? "TRANSFER") as "TRANSFER" | "CASH" | "PAYSTACK";
   const reference = String(formData.get("reference") ?? "").trim() || undefined;
   const note = String(formData.get("note") ?? "").trim() || undefined;
   if (!supplierId || !amount || amount <= 0) return { error: "Enter a valid amount." };
 
-  await prisma.supplierPrepayment.create({
-    data: { supplierId, amount, method, reference, note, paidById: session.userId },
+  await prisma.supplierPayment.create({
+    data: { supplierId, batchId, amount, method, reference, note, paidById: session.userId },
   });
   await audit({
     actorId: session.userId,
-    action: "supplier.prepay",
+    action: "supplier.payment",
     entity: "Supplier",
     entityId: supplierId,
-    after: { amount },
+    after: { amount, batchId },
   });
   revalidatePath(`/suppliers/${supplierId}`);
   revalidatePath("/suppliers");
-  return { ok: "Prepayment recorded." };
+  if (batchId) revalidatePath(`/purchases/${batchId}`);
+  revalidatePath("/purchases");
+  return { ok: "Payment recorded." };
 }

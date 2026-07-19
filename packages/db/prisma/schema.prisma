@@ -495,32 +495,9 @@ model Supplier {
   notes           String?
   createdAt       DateTime @default(now())
 
-  type            SupplierType?      @relation(fields: [typeId], references: [id])
+  type            SupplierType?     @relation(fields: [typeId], references: [id])
   purchaseBatches PurchaseBatch[]
-  prepayments     SupplierPrepayment[]
-}
-
-// Upfront money paid to a supplier before delivery. Purchase batches draw
-// down against the running prepayment balance (ledger-style, append-only).
-model SupplierPrepayment {
-  id         String        @id @default(cuid())
-  supplierId String
-  amount     Decimal       @db.Decimal(14, 2) // positive = paid in advance
-  method     PaymentMethod @default(TRANSFER)
-  reference  String?
-  note       String?
-  paidById   String?
-  createdAt  DateTime      @default(now())
-
-  supplier Supplier @relation(fields: [supplierId], references: [id])
-
-  @@index([supplierId])
-}
-
-enum PurchasePaymentStatus {
-  UNPAID
-  PARTIAL
-  PAID
+  payments        SupplierPayment[]
 }
 
 model PurchaseBatch {
@@ -532,7 +509,6 @@ model PurchaseBatch {
   fieldEstKg          Decimal?              @db.Decimal(10, 2)
   scaledInAt          DateTime?
   scaledInById        String?
-  paymentStatus       PurchasePaymentStatus @default(UNPAID)
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
 
@@ -564,17 +540,24 @@ enum PaymentMethod {
   PAYSTACK
 }
 
+// A single supplier account: every payment (advance or against a batch,
+// from any screen) is a credit here. Delivered batches are the debits.
+// Balance = Σ payments − Σ delivered value; batches settle FIFO.
 model SupplierPayment {
-  id        String        @id @default(cuid())
-  batchId   String
-  amount    Decimal       @db.Decimal(14, 2)
-  method    PaymentMethod @default(TRANSFER)
-  reference String?
-  isAdvance Boolean       @default(false)
-  paidById  String?
-  paidAt    DateTime      @default(now())
+  id         String        @id @default(cuid())
+  supplierId String
+  batchId    String? // optional: the batch this payment was made in relation to
+  amount     Decimal       @db.Decimal(14, 2)
+  method     PaymentMethod @default(TRANSFER)
+  reference  String?
+  note       String?
+  paidById   String?
+  paidAt     DateTime      @default(now())
 
-  batch PurchaseBatch @relation(fields: [batchId], references: [id])
+  supplier Supplier       @relation(fields: [supplierId], references: [id])
+  batch    PurchaseBatch? @relation(fields: [batchId], references: [id])
+
+  @@index([supplierId])
 }
 
 // ─────────────────── Materials, Inventory & Production ───────────────────
