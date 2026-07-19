@@ -1,5 +1,14 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "DATABASE_URL",
+    "DIRECT_URL",
+    "AUTH_SECRET",
+    "PAYSTACK_SECRET_KEY",
+    "TERMII_API_KEY",
+    "TERMII_SENDER_ID",
+    "NODE_ENV"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

@@ -15,3 +15,5 @@ generated/
 .claude/skills/ui-ux-pro-max/
 dist-test/
 apps/web/public/uploads/
+
+.vercel
