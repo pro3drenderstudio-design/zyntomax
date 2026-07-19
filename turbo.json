@@ -7,6 +7,9 @@
     "PAYSTACK_SECRET_KEY",
     "TERMII_API_KEY",
     "TERMII_SENDER_ID",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_UPLOAD_BUCKET",
     "NODE_ENV"
   ],
   "tasks": {
