@@ -159,6 +159,17 @@ model Setting {
   @@unique([key, siteId])
 }
 
+// One-time passcode for vendor phone login (vendors don't manage passwords).
+model VendorOtp {
+  id        String   @id @default(cuid())
+  phone     String
+  codeHash  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   actorId    String?

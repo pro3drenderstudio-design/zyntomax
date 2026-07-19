@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Zyntomax Vendor",
+    "slug": "zyntomax-vendor",
+    "version": "0.1.0",
+    "scheme": "zyntomax-vendor",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": { "backgroundColor": "#008037" },
+    "android": {
+      "package": "com.zyntomax.vendor",
+      "adaptiveIcon": { "backgroundColor": "#008037" }
+    },
+    "ios": { "bundleIdentifier": "com.zyntomax.vendor" },
+    "plugins": ["expo-router"],
+    "extra": { "apiUrl": "http://192.168.1.133:3100" }
+  }
+}

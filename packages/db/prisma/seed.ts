@@ -320,7 +320,7 @@ async function main() {
   let vi = 0;
   for (const v of vendorNames) {
     const loc = localityDefs[vi % 3];
-    const phone = `0810000${String(100 + vi)}`;
+    const phone = `0810${String(1000000 + vi)}`; // 11-digit Nigerian format
     const existing = await prisma.vendor.findUnique({ where: { phone } });
     if (!existing) {
       await prisma.vendor.create({
