@@ -27,5 +27,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|uploads).*)"],
+  // Exclude Next internals, uploads, and any static asset with a file
+  // extension (logo.png, images, etc.) so public files aren't auth-gated.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|uploads|.*\\.[\\w]+$).*)"],
 };
