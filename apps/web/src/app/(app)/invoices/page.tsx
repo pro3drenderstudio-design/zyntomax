@@ -14,7 +14,6 @@ export default async function InvoicesPage() {
     include: {
       payments: true,
       salesOrder: { include: { customer: true } },
-      dispatch: { include: { order: { include: { customer: true } } } },
     },
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -26,8 +25,8 @@ export default async function InvoicesPage() {
     const open = Number(inv.amount) - paid;
     const daysOverdue =
       open > 0 ? Math.floor((now - inv.dueDate.getTime()) / 86400000) : 0;
-    const customer = inv.salesOrder?.customer ?? inv.dispatch?.order.customer;
-    const orderId = inv.salesOrderId ?? inv.dispatch?.orderId;
+    const customer = inv.salesOrder?.customer;
+    const orderId = inv.salesOrderId;
     return { inv, paid, open, daysOverdue, customerName: customer?.name ?? "—", orderId };
   });
 
@@ -40,7 +39,7 @@ export default async function InvoicesPage() {
 
   return (
     <div>
-      <PageHeader title="Invoices & receivables" subtitle="Generated automatically on dispatch" />
+      <PageHeader title="Invoices & receivables" subtitle="Generated automatically when a sale is recorded" />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Current (not due)" value={formatNaira(buckets.current)} />

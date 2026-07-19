@@ -4,7 +4,8 @@ import { requireSession, accessibleSiteIds, hasRole } from "@/lib/auth";
 import {
   PageHeader, Card, Badge, statusTone, Table, formatKg,
 } from "@/components/ui";
-import { CreateJobForm, CompleteJobForm, ResolveJobForm } from "./job-forms";
+import { inventoryBuckets } from "@/lib/inventory";
+import { CreateJobForm, CompleteJobForm, ResolveJobForm, type InputOption } from "./job-forms";
 
 export default async function ProductionPage({
   searchParams,
@@ -16,7 +17,7 @@ export default async function ProductionPage({
   const { status } = await searchParams;
   const canSupervise = hasRole(session, ["FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"]);
 
-  const [jobs, sites, stages, materials, staff, routes, stageOutputs] = await Promise.all([
+  const [jobs, sites, stages, staff, recipes] = await Promise.all([
     prisma.job.findMany({
       where: {
         ...(siteIds ? { siteId: { in: siteIds } } : {}),
@@ -26,28 +27,52 @@ export default async function ProductionPage({
         stage: true,
         materialType: true,
         assignments: { include: { staff: { include: { user: true } } } },
-        outputs: { include: { stageOutput: true } },
+        outputs: { include: { outputMaterial: true } },
       },
       orderBy: [{ status: "asc" }, { startedAt: "desc" }],
       take: 100,
     }),
     prisma.site.findMany({ where: { active: true, ...(siteIds ? { id: { in: siteIds } } : {}) } }),
     prisma.processStage.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-    prisma.materialType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     prisma.staffProfile.findMany({
       where: { user: { status: "ACTIVE" } },
       include: { user: true },
       orderBy: { staffNo: "asc" },
     }),
-    prisma.materialRoute.findMany({ select: { materialTypeId: true, stageId: true } }),
-    prisma.stageOutput.findMany({ where: { active: true } }),
+    prisma.stageOutput.findMany({
+      where: { active: true },
+      include: { outputMaterial: true },
+    }),
   ]);
 
-  // outputs available for a given (stage, material)
+  // recipe outputs for a given (stage, input material)
   const outputsFor = (stageId: string, materialTypeId: string) =>
-    stageOutputs
-      .filter((o) => o.stageId === stageId && o.materialTypeId === materialTypeId)
-      .map((o) => ({ id: o.id, name: o.name, color: o.color }));
+    recipes
+      .filter((r) => r.stageId === stageId && r.inputMaterialTypeId === materialTypeId)
+      .map((r) => ({ id: r.outputMaterialTypeId, name: r.outputMaterial.name, color: r.outputMaterial.color }));
+
+  // Available input materials per site = raw (at intake) + intermediate (in the
+  // pool), limited to materials some stage has a recipe for.
+  const stagesForInput = new Map<string, string[]>();
+  for (const r of recipes) {
+    const arr = stagesForInput.get(r.inputMaterialTypeId) ?? [];
+    if (!arr.includes(r.stageId)) arr.push(r.stageId);
+    stagesForInput.set(r.inputMaterialTypeId, arr);
+  }
+  const inputsBySite: Record<string, InputOption[]> = {};
+  for (const s of sites) {
+    const b = await inventoryBuckets([s.id]);
+    const candidates = [...b.raw, ...b.waiting];
+    inputsBySite[s.id] = candidates
+      .filter((m) => stagesForInput.has(m.materialId))
+      .map((m) => ({
+        materialId: m.materialId,
+        name: m.name,
+        kind: m.kind,
+        availableKg: m.kg,
+        stageIds: stagesForInput.get(m.materialId) ?? [],
+      }));
+  }
 
   const open = jobs.filter((j) => ["ASSIGNED", "IN_PROGRESS"].includes(j.status));
   const flagged = jobs.filter((j) => j.status === "FLAGGED");
@@ -66,9 +91,8 @@ export default async function ProductionPage({
           <CreateJobForm
             sites={sites.map((s) => ({ id: s.id, name: s.name }))}
             stages={stages.map((s) => ({ id: s.id, name: s.name }))}
-            materials={materials.map((m) => ({ id: m.id, name: m.name }))}
             staff={staff.map((s) => ({ id: s.id, name: `${s.user.name} (${s.staffNo})` }))}
-            routes={routes}
+            inputsBySite={inputsBySite}
           />
         </Card>
       )}
@@ -94,8 +118,8 @@ export default async function ProductionPage({
                   <div className="mb-1 flex flex-wrap gap-1.5">
                     {j.outputs.map((o) => (
                       <span key={o.id} className="inline-flex items-center gap-1 rounded-full bg-muted-bg px-2 py-0.5 text-xs">
-                        <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: o.stageOutput.color ?? "#cbd5e1" }} aria-hidden />
-                        {o.stageOutput.name}: {formatKg(Number(o.weightKg))}
+                        <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: o.outputMaterial.color ?? "#cbd5e1" }} aria-hidden />
+                        {o.outputMaterial.name}: {formatKg(Number(o.weightKg))}
                       </span>
                     ))}
                   </div>

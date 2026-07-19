@@ -6,7 +6,7 @@ import { createPurchaseBatch, scaleInBatch } from "@/app/(app)/purchases/actions
 import { createJob, completeJob } from "@/app/(app)/production/actions";
 import { createPayrollRun } from "@/app/(app)/payroll/actions";
 import { recordSale, recordCustomerPayment } from "@/app/(app)/orders/actions";
-import { locationBalances } from "@/lib/inventory";
+import { inventoryBuckets } from "@/lib/inventory";
 
 /**
  * DEV ONLY — drives the full business loop through the real server actions.
@@ -108,32 +108,31 @@ export async function GET() {
   if (r.error) return fail(`scaleIn: ${r.error}`);
   log.push(`Purchase ${pBatch.lotNo}: 500kg PET scaled in @ ₦180/kg`);
 
-  // ── 3. Production: PET route Sorting → Crushing → Washing → Pelletizing ──
-  const stages = ["Sorting", "Crushing", "Washing", "Pelletizing"];
-  const weights: [number, number, number][] = [
-    [300, 280, 15], // in, out, waste — 5kg (1.7%) within 2% tolerance
-    [280, 270, 8],
-    [270, 265, 4.5],
-    [265, 260, 4],
+  // ── 3. Production: PET line, each stage transforms into the next material ──
+  const mat = async (name: string) => prisma.materialType.findUniqueOrThrow({ where: { name } });
+  const chain: { stage: string; input: string; output: string; inKg: number; outKg: number; waste: number }[] = [
+    { stage: "Sorting", input: "PET", output: "Sorted PET", inKg: 300, outKg: 280, waste: 15 },
+    { stage: "Crushing", input: "Sorted PET", output: "Crushed PET", inKg: 280, outKg: 270, waste: 8 },
+    { stage: "Washing", input: "Crushed PET", output: "Washed PET", inKg: 270, outKg: 265, waste: 4.5 },
+    { stage: "Pelletizing", input: "Washed PET", output: "PET Pellets", inKg: 265, outKg: 260, waste: 4 },
   ];
-  for (let i = 0; i < stages.length; i++) {
-    const stage = await prisma.processStage.findUniqueOrThrow({ where: { name: stages[i] } });
-    const [inKg, outKg, wasteKg] = weights[i];
+  for (const c of chain) {
+    const stage = await prisma.processStage.findUniqueOrThrow({ where: { name: c.stage } });
+    const input = await mat(c.input);
+    const output = await mat(c.output);
     r = await createJob({}, fd({
-      siteId: site.id,
-      stageId: stage.id,
-      materialTypeId: pet.id,
-      weightInKg: String(inKg),
-      staffIds: sorters.slice(0, 2).map((s) => s.id),
+      siteId: site.id, stageId: stage.id, materialTypeId: input.id,
+      weightInKg: String(c.inKg), staffIds: sorters.slice(0, 2).map((s) => s.id),
     }));
-    if (r.error) return fail(`createJob ${stages[i]}: ${r.error}`);
+    if (r.error) return fail(`createJob ${c.stage}: ${r.error}`);
     const job = await prisma.job.findFirstOrThrow({
-      where: { stageId: stage.id, status: "IN_PROGRESS" },
-      orderBy: { startedAt: "desc" },
+      where: { stageId: stage.id, status: "IN_PROGRESS" }, orderBy: { startedAt: "desc" },
     });
-    r = await completeJob({}, fd({ jobId: job.id, weightOutKg: String(outKg), wasteKg: String(wasteKg) }));
-    if (r.error) return fail(`completeJob ${stages[i]}: ${r.error}`);
-    log.push(`${stages[i]}: ${inKg}kg in → ${outKg}kg out + ${wasteKg}kg waste`);
+    r = await completeJob({}, fd({
+      jobId: job.id, outputMaterialTypeId: [output.id], outWeight: [String(c.outKg)], wasteKg: String(c.waste),
+    }));
+    if (r.error) return fail(`completeJob ${c.stage}: ${r.error}`);
+    log.push(`${c.stage}: ${c.inKg}kg ${c.input} → ${c.outKg}kg ${c.output} + ${c.waste}kg waste`);
   }
 
   // ── 4. Payroll ─────────────────────────────────────────────────────
@@ -147,13 +146,13 @@ export async function GET() {
   log.push(`Payroll run opened: ${run.items.length} staff, ₦${totalWages.toLocaleString()} earned`);
 
   // ── 5. Sales: record sale (deducts finished goods) → invoice → payment ──
-  const product = await prisma.product.findUniqueOrThrow({ where: { name: "PET Pellets" } });
+  const pellets = await prisma.materialType.findUniqueOrThrow({ where: { name: "PET Pellets" } });
   await swallowRedirect(() =>
     recordSale({}, fd({
       customerId: customer.id,
       siteId: site.id,
       kind: ["inventory"],
-      itemRef: [`product:${product.id}`],
+      itemRef: [pellets.id],
       description: [""],
       qtyKg: ["200"],
       unitPrice: ["950"],
@@ -171,21 +170,21 @@ export async function GET() {
   log.push(`Sale ${order.orderNo} → 200kg deducted → ${invoice.invoiceNo} ₦${Number(invoice.amount).toLocaleString()} → ₦100,000 received`);
 
   // ── Invariant checks ───────────────────────────────────────────────
-  const balances = await locationBalances(null);
+  const buckets = await inventoryBuckets(null);
+  const sum = (arr: { kg: number }[]) => arr.reduce((s, m) => s + m.kg, 0);
   const walletAgg = await prisma.walletTransaction.aggregate({ _sum: { amount: true } });
-  const intake = balances.filter((b) => b.kind === "INTAKE").reduce((s, b) => s + b.totalKg, 0);
-  const wip = balances.filter((b) => b.kind === "STAGE_WIP").reduce((s, b) => s + b.totalKg, 0);
-  const finished = balances.filter((b) => b.kind === "FINISHED_STORE").reduce((s, b) => s + b.totalKg, 0);
-  const vehicle = balances.filter((b) => b.kind === "VEHICLE").reduce((s, b) => s + b.totalKg, 0);
+  const intake = sum(buckets.raw);
+  const waiting = sum(buckets.waiting);
+  const active = buckets.active.reduce((s, st) => s + sum(st.materials), 0);
+  const finished = sum(buckets.finished);
 
   const checks = {
     // 59 PET + 25 Alu remitted + 500 purchased − 300 assigned to sorting = 284
     intakeExpected284: Math.abs(intake - 284) < 0.01,
-    // 300−280 out at sorting stays as... all moved through; WIP = leftovers between stages: 0? Sorting got 300, out 280→Crushing; Crushing took 280 (all), etc. Pelletizing out 260 → finished. WIP left: none (each stage consumed its inflow fully except within-tolerance losses went to WASTE)
-    wipExpectedZero: Math.abs(wip) < 0.01,
-    // 260 produced − 200 dispatched = 60
+    // each intermediate fully consumed by the next stage → nothing left in-processing
+    inProcessingZero: Math.abs(waiting + active) < 0.01,
+    // 260 PET Pellets produced − 200 sold = 60
     finishedExpected60: Math.abs(finished - 60) < 0.01,
-    vehicleExpectedZero: Math.abs(vehicle) < 0.01,
     // 500,000 − 32,000 payouts = 468,000
     walletExpected468k: Math.abs(Number(walletAgg._sum.amount ?? 0) - 468000) < 0.01,
   };
@@ -194,7 +193,7 @@ export async function GET() {
   return NextResponse.json({
     ok: allOk,
     checks,
-    actuals: { intake, wip, finished, vehicle, wallet: Number(walletAgg._sum.amount ?? 0) },
+    actuals: { intake, waiting, active, finished, wallet: Number(walletAgg._sum.amount ?? 0) },
     log,
   });
 }

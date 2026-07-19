@@ -32,15 +32,14 @@ export async function recordSale(
   if (!customerId || !siteId) return { error: "Pick a customer and site." };
 
   const kinds = formData.getAll("kind").map(String); // "inventory" | "other"
-  const itemRefs = formData.getAll("itemRef").map(String); // "product:<id>" | "output:<id>"
+  const itemRefs = formData.getAll("itemRef").map(String); // FINISHED material id
   const descriptions = formData.getAll("description").map(String);
   const qtys = formData.getAll("qtyKg").map(Number);
   const prices = formData.getAll("unitPrice").map(Number);
 
   type Line = {
     isInventory: boolean;
-    productId: string | null;
-    stageOutputId: string | null;
+    materialTypeId: string | null;
     description: string | null;
     qtyKg: number;
     unitPrice: number;
@@ -51,32 +50,23 @@ export async function recordSale(
     const qty = qtys[i];
     const price = prices[i];
     if (isInv) {
-      const ref = itemRefs[i] ?? "";
-      const [kind, id] = ref.split(":");
+      const id = itemRefs[i] ?? "";
       if (!id || !(qty > 0) || !(price >= 0)) continue;
-      lines.push({
-        isInventory: true,
-        productId: kind === "product" ? id : null,
-        stageOutputId: kind === "output" ? id : null,
-        description: null,
-        qtyKg: qty,
-        unitPrice: price,
-      });
+      lines.push({ isInventory: true, materialTypeId: id, description: null, qtyKg: qty, unitPrice: price });
     } else {
       const desc = (descriptions[i] ?? "").trim();
       if (!desc || !(price > 0)) continue;
-      lines.push({ isInventory: false, productId: null, stageOutputId: null, description: desc, qtyKg: qty > 0 ? qty : 1, unitPrice: price });
+      lines.push({ isInventory: false, materialTypeId: null, description: desc, qtyKg: qty > 0 ? qty : 1, unitPrice: price });
     }
   }
   if (lines.length === 0) return { error: "Add at least one valid sale line." };
 
-  // Stock check against live availability
+  // Stock check against live availability of FINISHED materials
   const stock = await sellableStock([siteId]);
-  const availOf = new Map(stock.map((s) => [`${s.kind}:${s.id}`, s]));
+  const availOf = new Map(stock.map((s) => [s.materialId, s]));
   for (const l of lines) {
-    if (!l.isInventory) continue;
-    const key = l.productId ? `product:${l.productId}` : `stageOutput:${l.stageOutputId}`;
-    const item = availOf.get(key);
+    if (!l.isInventory || !l.materialTypeId) continue;
+    const item = availOf.get(l.materialTypeId);
     if (!item || item.availableKg < l.qtyKg) {
       return { error: `Only ${(item?.availableKg ?? 0).toFixed(1)} kg of ${item?.name ?? "that item"} is available.` };
     }
@@ -97,8 +87,7 @@ export async function recordSale(
         createdById: session.userId,
         items: {
           create: lines.map((l) => ({
-            productId: l.productId,
-            stageOutputId: l.stageOutputId,
+            materialTypeId: l.materialTypeId,
             description: l.description,
             isInventory: l.isInventory,
             qtyKg: l.qtyKg,
@@ -108,17 +97,16 @@ export async function recordSale(
       },
     });
 
-    // Deduct finished goods for inventory lines (product or stage output)
+    // Deduct finished goods for inventory lines
     for (const l of lines) {
-      if (l.isInventory && (l.productId || l.stageOutputId) && store && customerLoc) {
+      if (l.isInventory && l.materialTypeId && store && customerLoc) {
         await tx.inventoryMovement.create({
           data: {
             fromLocationId: store.id,
             toLocationId: customerLoc.id,
-            productId: l.productId,
-            stageOutputId: l.stageOutputId,
+            materialTypeId: l.materialTypeId,
             weightKg: l.qtyKg,
-            refType: "DISPATCH",
+            refType: "SALE",
             refId: so.id,
             byId: session.userId,
             note: "Sold to customer",

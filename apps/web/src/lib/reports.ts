@@ -82,7 +82,7 @@ export async function purchasesReport(from: Date, to: Date) {
 export async function salesReport(from: Date, to: Date) {
   const orders = await prisma.salesOrder.findMany({
     where: { createdAt: { gte: from, lt: to } },
-    include: { customer: true, items: { include: { product: true } }, invoice: { include: { payments: true } } },
+    include: { customer: true, items: { include: { materialType: true } }, invoice: { include: { payments: true } } },
     orderBy: { createdAt: "asc" },
   });
   return orders.map((o) => {
@@ -90,7 +90,7 @@ export async function salesReport(from: Date, to: Date) {
     const paid = o.invoice?.payments.reduce((s, p) => s + Number(p.amount), 0) ?? 0;
     return {
       orderNo: o.orderNo, date: o.createdAt, customer: o.customer.name,
-      items: o.items.map((i) => (i.isInventory ? i.product?.name : i.description)).filter(Boolean).join(", "),
+      items: o.items.map((i) => (i.isInventory ? i.materialType?.name : i.description)).filter(Boolean).join(", "),
       total, paid, outstanding: total - paid,
     };
   });

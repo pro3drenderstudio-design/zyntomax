@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@zyntomax/db";
 import { mobileSession, mobileHasRole } from "@/lib/mobile-auth";
-import { locationBalances } from "@/lib/inventory";
+import { inventoryBuckets } from "@/lib/inventory";
 import { startOfDay } from "date-fns";
 
 /** On-the-go admin dashboard: KPIs + pending approvals. */
@@ -14,13 +14,13 @@ export async function GET(request: NextRequest) {
 
   const dayStart = startOfDay(new Date());
   const [
-    vendorCount, todayCollected, flaggedJobs, balances, walletAgg,
+    vendorCount, todayCollected, flaggedJobs, buckets, walletAgg,
     reconciledTrips, readyBatches, activeTrips,
   ] = await Promise.all([
     prisma.vendor.count({ where: { status: "ACTIVE" } }),
     prisma.collectionWeighIn.aggregate({ _sum: { weightKg: true, amount: true }, where: { createdAt: { gte: dayStart } } }),
     prisma.job.count({ where: { status: "FLAGGED" } }),
-    locationBalances(null),
+    inventoryBuckets(null),
     prisma.walletTransaction.aggregate({ _sum: { amount: true } }),
     prisma.trip.findMany({
       where: { status: "RECONCILED" },
@@ -34,9 +34,10 @@ export async function GET(request: NextRequest) {
     prisma.trip.count({ where: { status: { in: ["PLANNED", "IN_PROGRESS"] } } }),
   ]);
 
-  const wip = balances.filter((b) => b.kind === "STAGE_WIP").reduce((s, b) => s + b.totalKg, 0);
-  const finished = balances.filter((b) => b.kind === "FINISHED_STORE").reduce((s, b) => s + b.totalKg, 0);
-  const intake = balances.filter((b) => b.kind === "INTAKE").reduce((s, b) => s + b.totalKg, 0);
+  const sumKg = (arr: { kg: number }[]) => arr.reduce((s, m) => s + m.kg, 0);
+  const wip = sumKg(buckets.waiting) + buckets.active.reduce((s, st) => s + sumKg(st.materials), 0);
+  const finished = sumKg(buckets.finished);
+  const intake = sumKg(buckets.raw);
 
   return NextResponse.json({
     kpis: {

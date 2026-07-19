@@ -1,6 +1,6 @@
 # Zyntomax Platform — System Design
 
-*The single system that runs Zyntomax Ventures Limited end to end: waste collection, purchasing, factory production, sales & dispatch, HR & wages, finance, and reporting. Designed multi-site from day one.*
+*The single system that runs Zyntomax Ventures Limited end to end: waste collection, purchasing, factory production, sales, HR & wages, finance, and reporting. Designed multi-site from day one.*
 
 ---
 
@@ -8,7 +8,7 @@
 
 Everything in Zyntomax is one of two flows, and the system tracks both as append-only ledgers:
 
-- **Material flows in one direction:** vendor's gate / supplier's truck → collection vehicle → factory intake → sorting → (stages…) → finished goods store → dispatch truck → customer. Every hop is a weigh event with who/when/where/photo, and the difference between hops is computed automatically. Weight can never appear or disappear without a record.
+- **Material flows in one direction:** vendor's gate / supplier's truck → collection vehicle → factory intake → sorting → (stages, branching per recipe…) → finished goods store → customer. Every hop is a weigh event with who/when/where/photo, and the difference between hops is computed automatically. Weight can never appear or disappear without a record.
 - **Money flows in both directions:** in from customer payments and wallet top-ups; out to vendors (Paystack), suppliers, staff wages, and expenses. Every naira is a ledger entry tied to the material or activity that caused it.
 
 Because both ledgers are immutable (corrections are reversing entries, never edits), balances are always computed, discrepancies are always visible, and P&L falls out for free.
@@ -36,7 +36,7 @@ Because both ledgers are immutable (corrections are reversing entries, never edi
 | Finance Admin | Wallet top-ups, payout batch approval, expenses, payroll runs, invoicing, budgets |
 | Purchasing Manager | Suppliers, field purchases, purchase batches |
 | HR Admin | Staff records, ID cards, PPE issuance, medical/rewards logs, advances |
-| Sales Admin | Customers, price lists, sales orders, dispatch authorization |
+| Sales Admin | Customers, price lists, sales orders, invoicing |
 | Team Lead (Collection) | Runs a trip: route, weigh-ins, manifest |
 | Collection Agent | Register vendors, record weigh-ins, assisted pickup requests |
 | Production Staff | Own assignments and own wage tally only |
@@ -73,20 +73,21 @@ Users hold **multiple roles** (`user → roles[]`), each role grant optionally s
 5. **Supplier payment** recorded against the batch (transfer/cash, less any advance) — payables visible until settled.
 
 ### 5.3 Production
-1. **Material types** (PET, general plastics, tin, iron, aluminium…) are admin-created. Each has an ordered **process route** (e.g. PET: sorting → post-sorting → crushing → washing → pelletizing). Stages are admin-created; adding one later doesn't break history.
-2. **Job** = stage + material type + assigned staff + scaled-in weight. 30 sorters = 30 concurrent jobs (or grouped assignments). Scale station tablet, staff QR login.
-3. On completion: scale out **good output** + **waste**. `in − (out + waste)` = job discrepancy, checked against per-stage tolerance; out-of-tolerance blocks the output from moving on until the supervisor resolves it.
-4. Output of the final stage becomes a **product** (finished SKU: material + form, e.g. "PET pellets") in the finished goods store.
-5. **Lot traceability:** the lot number from the purchase batch / collection trip follows material through every stage to finished goods → yield per source ("dumpsite X's PET yields 71%, supplier Y's 84%") directly informs purchasing.
-6. **Live WIP dashboard:** raw inventory by type, kg in each stage right now, finished goods by product — all computed from the movement ledger.
+See **`PRODUCTION_MODEL.md`** for the full model (schema, buckets, worked example).
+1. **One material catalog, three kinds.** Every material — RAW (PET, general plastics, tin…), INTERMEDIATE (sorted PP, crushed HDPE…), FINISHED (PET pellets, crushed HDPE for sale…) — is a `MaterialType` with a `kind`. Only FINISHED is sellable. Materials and stages are admin-created; adding either later doesn't break history.
+2. **Recipes** (`StageOutput`: stage + input material → output material) define the transformation graph. A stage can **branch** one input into several outputs — e.g. Sorting turns General Plastics into PP White, PP Blue, HDPE and Masterbatch at once. The graph replaces the old fixed per-material route, so lines can split and merge.
+3. **Job** = stage + input material + assigned staff + scaled-in weight; consuming the input moves it into the stage. 30 sorters = 30 concurrent jobs. Scale station tablet, staff QR login.
+4. On completion: scale out each **recipe output** (kg per output material) + **waste**. `in − (Σ out + waste)` = job discrepancy, checked against per-stage tolerance; out-of-tolerance blocks the outputs from moving on until the supervisor resolves it.
+5. **Where outputs land:** a FINISHED output goes to the finished goods store (sellable); any INTERMEDIATE output goes back to the in-processing pool to await its next stage — so **only end-of-line outputs count as finished product**, and a mid-line output (e.g. sorted PP White before it is crushed) is still "material in processing."
+6. **Lot traceability:** the lot number from the purchase batch / collection trip follows material through every stage to finished goods → yield per source ("dumpsite X's PET yields 71%, supplier Y's 84%") directly informs purchasing.
+7. **Three-bucket inventory, computed from the ledger:** *raw* (INTAKE), *in processing* (IN_PROCESSING pool + STAGE_WIP, per material and per stage), *finished* (FINISHED_STORE). `inventoryBuckets()` in `lib/inventory.ts`; each material links to its full cross-stage processing history.
 
-### 5.4 Sales & dispatch
+### 5.4 Sales
 1. **Customers** (offtakers) with contacts, credit terms, and history.
-2. **Price list** per product with effective dates; optional per-customer overrides.
-3. **Sales order:** customer + line items (product, qty kg, unit price). Confirming reserves finished goods (visible as "reserved" vs "available").
-4. **Dispatch:** vehicle, driver, waybill number, **scale-out weights per line + gate photo**. Partial dispatches supported; dispatched weight is the invoiced weight.
-5. **Invoice** auto-generated from dispatch; **customer payments** recorded against it (transfer/Paystack); receivables aging report (current / 30 / 60 / 90).
-6. Sales revenue feeds P&L; dispatch is just another inventory movement out of finished goods, so stock always reconciles.
+2. **Price list** per finished material with effective dates; optional per-customer overrides.
+3. **Sales order:** customer + line items (finished material, qty kg, unit price). Inventory lines are capped at the material's available FINISHED stock, so you can't oversell.
+4. Recording the sale **deducts finished goods** (an inventory movement out of the store) and **auto-generates the invoice**; **customer payments** are recorded against it (transfer/Paystack); receivables aging report (current / 30 / 60 / 90).
+5. Sales revenue feeds P&L; the sale's stock-out movement means finished-goods stock always reconciles.
 
 ### 5.5 HR & wages
 - Full staff profile: bio-data, photo, bank, BVN (per §10), next of kin, emergency contact, address, documents, role(s), hire date.
@@ -103,7 +104,7 @@ Users hold **multiple roles** (`user → roles[]`), each role grant optionally s
 - Budgets per category per month; actual-vs-budget report.
 - **Targets:** admin sets e.g. *40 tons finished output/month* (total or per material, per site). Dashboard: achieved, **kg remaining**, required daily run-rate vs actual, projected month-end. Same pattern for collection, purchasing, and sales targets.
 - **P&L:** revenue (invoices) − COGS (batch landed cost + stage wages, allocated via lots) − opex = gross/net profit, per period / material / site.
-- **Unit economics:** true cost per kg of finished goods vs selling price, per product — the report that says which materials make money.
+- **Unit economics:** true cost per kg of finished goods vs selling price, per finished material — the report that says which materials make money.
 
 ## 6. Data model (phase-1-complete entity map)
 
@@ -144,13 +145,13 @@ Users hold **multiple roles** (`user → roles[]`), each role grant optionally s
 ### Materials, inventory & production
 | Table | Key fields |
 |---|---|
-| `material_types` | name, active |
-| `process_stages` | name, active |
-| `material_routes` | material_type, stage, sequence |
-| `products` | material_type, form (pellets/flakes/bale…), name, unit |
-| `inventory_locations` | site, kind (intake / stage_wip / finished_store / vehicle), stage_id? |
-| `inventory_movements` | **append-only ledger:** from_location, to_location, material_type or product, weight_kg, lot_no, ref_type+ref_id (job/trip/batch/dispatch/transfer), by, ts |
-| `jobs` | site, stage, material_type, lot_no, assignees[], weight_in, weight_out, waste_kg, discrepancy, tolerance_snapshot, photos, status, started/completed |
+| `material_types` | name, **kind (RAW / INTERMEDIATE / FINISHED)**, color?, active |
+| `process_stages` | name, pay_basis (scale_in / scale_out), active |
+| `stage_outputs` | **recipe:** stage, input_material, output_material, active — the transformation graph (a stage can branch one input into many outputs) |
+| `inventory_locations` | site, kind (intake / in_processing / stage_wip / finished_store / vehicle), stage_id? |
+| `inventory_movements` | **append-only ledger:** from_location, to_location, material_type, weight_kg, lot_no, ref_type+ref_id (job/trip/batch/sale/transfer), by, ts |
+| `jobs` | site, stage, input material_type, lot_no, assignees[], weight_in, weight_out, waste_kg, discrepancy, tolerance_snapshot, photos, status, started/completed |
+| `job_outputs` | job, output_material_type, weight_kg — one row per recipe output produced by the job |
 
 ### HR & wages
 | Table | Key fields |
@@ -165,10 +166,9 @@ Users hold **multiple roles** (`user → roles[]`), each role grant optionally s
 | Table | Key fields |
 |---|---|
 | `customers` | name, contacts, credit_terms, notes |
-| `price_lists` | product, price_per_kg, effective_from, customer_id? (override) |
-| `sales_orders` / `sales_order_items` | customer, site, status; product, qty_kg, unit_price |
-| `dispatches` / `dispatch_items` | order, vehicle, driver, waybill_no, gate_photo, status; product, weight_kg |
-| `invoices` / `customer_payments` | dispatch, amount, due_date, status; invoice, amount, method, ref, date |
+| `price_lists` | material_type (FINISHED), price_per_kg, effective_from, customer_id? (override) |
+| `sales_orders` / `sales_order_items` | customer, site, status; material_type (or free-text description), qty_kg, unit_price, is_inventory |
+| `invoices` / `customer_payments` | sales_order, amount, due_date, status; invoice, amount, method, ref, date |
 
 ### Finance & planning
 | Table | Key fields |
@@ -196,9 +196,9 @@ Users hold **multiple roles** (`user → roles[]`), each role grant optionally s
 | Phase | Scope | Why this order |
 |---|---|---|
 | **1 — Collection money loop** | Auth/roles/sites, staff records, vendor registration + map, trips, field weigh-in (offline), reconciliation, Paystack payouts, SMS | The highest-fraud-risk, highest-trust flow; justifies the app alone |
-| **2 — Factory** | Suppliers, purchase batches + expenses + landed cost, material types, routes/stages, jobs, scale in/out/waste, WIP dashboard, lots | Turns the factory from opaque to glass |
+| **2 — Factory** | Suppliers, purchase batches + expenses + landed cost, material catalog (RAW/INTERMEDIATE/FINISHED), stages + recipes, jobs, scale in/out/waste, three-bucket inventory, lots | Turns the factory from opaque to glass |
 | **3 — Wages** | Rate cards, weekly payroll runs, advances, PPE/medical/incident logs, ID cards | Depends on phase-2 job data; kills payday disputes |
-| **4 — Sales** | Customers, price lists, orders, dispatch, invoicing, receivables | Closes the revenue side; enables true P&L |
+| **4 — Sales** | Customers, price lists, orders, finished-goods stock-out, invoicing, receivables | Closes the revenue side; enables true P&L |
 | **5 — Intelligence + vendor self-service** | Budgets, targets/projections, unit economics, P&L, rewards engine, Vendor app | Built on complete data from phases 1–4 |
 
 Phases 3 and 4 can swap depending on which manual process hurts more. Each phase is independently useful in production.

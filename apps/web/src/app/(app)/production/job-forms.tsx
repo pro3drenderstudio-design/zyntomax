@@ -5,63 +5,63 @@ import { createJob, completeJob, resolveJob, type FormState } from "./actions";
 import { inputClass, labelClass, buttonClass } from "@/components/ui";
 
 type Option = { id: string; name: string };
-export type StageOutputOption = { id: string; name: string; color: string | null };
+export type InputOption = { materialId: string; name: string; kind: string; availableKg: number; stageIds: string[] };
+export type OutputOption = { id: string; name: string; color: string | null };
 
 export function CreateJobForm({
   sites,
   stages,
-  materials,
   staff,
-  routes,
+  inputsBySite,
 }: {
   sites: Option[];
   stages: Option[];
-  materials: Option[];
   staff: Option[];
-  routes: { materialTypeId: string; stageId: string }[];
+  inputsBySite: Record<string, InputOption[]>;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(createJob, {});
+  const [siteId, setSiteId] = useState(sites[0]?.id ?? "");
   const [materialId, setMaterialId] = useState("");
 
-  // Only stages on the selected material's route
-  const validStageIds = new Set(
-    routes.filter((r) => r.materialTypeId === materialId).map((r) => r.stageId),
-  );
-  const availableStages = materialId
-    ? stages.filter((s) => validStageIds.has(s.id))
-    : [];
+  const inputs = inputsBySite[siteId] ?? [];
+  const selected = inputs.find((i) => i.materialId === materialId);
+  const availableStages = selected ? stages.filter((s) => selected.stageIds.includes(s.id)) : [];
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-4">
         <div>
-          <label htmlFor="j-site" className={labelClass}>Site</label>
-          <select id="j-site" name="siteId" required className={inputClass}>
+          <label className={labelClass}>Site</label>
+          <select name="siteId" required value={siteId} onChange={(e) => { setSiteId(e.target.value); setMaterialId(""); }} className={inputClass}>
             {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
         <div>
-          <label htmlFor="j-material" className={labelClass}>Material</label>
-          <select id="j-material" name="materialTypeId" required value={materialId} onChange={(e) => setMaterialId(e.target.value)} className={inputClass}>
-            <option value="" disabled>— Select —</option>
-            {materials.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          <label className={labelClass}>Input material (in stock)</label>
+          <select name="materialTypeId" required value={materialId} onChange={(e) => setMaterialId(e.target.value)} className={inputClass}>
+            <option value="" disabled>{inputs.length ? "— Select —" : "Nothing available"}</option>
+            {inputs.map((i) => (
+              <option key={i.materialId} value={i.materialId}>
+                {i.name} — {i.availableKg.toLocaleString("en-NG", { maximumFractionDigits: 1 })} kg {i.kind === "RAW" ? "(raw)" : "(in processing)"}
+              </option>
+            ))}
           </select>
         </div>
         <div>
-          <label htmlFor="j-stage" className={labelClass}>Stage</label>
-          <select id="j-stage" name="stageId" required className={inputClass} defaultValue="" disabled={!materialId}>
+          <label className={labelClass}>Stage</label>
+          <select name="stageId" required className={inputClass} defaultValue="" disabled={!materialId}>
             <option value="" disabled>{materialId ? "— Select —" : "Pick material first"}</option>
             {availableStages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
         <div>
-          <label htmlFor="j-weight" className={labelClass}>Scale-in weight (kg)</label>
-          <input id="j-weight" name="weightInKg" type="number" step="0.1" min="0.1" required className={inputClass} />
+          <label className={labelClass}>Scale-in weight (kg){selected ? ` · max ${selected.availableKg.toLocaleString("en-NG", { maximumFractionDigits: 1 })}` : ""}</label>
+          <input name="weightInKg" type="number" step="0.1" min="0.1" max={selected?.availableKg} required className={inputClass} />
         </div>
       </div>
 
       <fieldset>
-        <legend className={labelClass}>Assign staff (wage is split equally)</legend>
+        <legend className={labelClass}>Assign staff (wage split equally)</legend>
         <div className="grid max-h-40 gap-1.5 overflow-y-auto sm:grid-cols-3">
           {staff.map((s) => (
             <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted-bg">
@@ -85,35 +85,24 @@ export function CompleteJobForm({
   outputs,
 }: {
   jobId: string;
-  outputs: StageOutputOption[];
+  outputs: OutputOption[];
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(completeJob, {});
-
   return (
     <form action={formAction} className="flex flex-col gap-2">
       <input type="hidden" name="jobId" value={jobId} />
-      {outputs.length > 0 ? (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-xs font-medium text-muted">Scale out each output type (kg)</p>
-          {outputs.map((o) => (
-            <div key={o.id} className="flex items-center gap-2">
-              <input type="hidden" name="stageOutputId" value={o.id} />
-              <span
-                className="inline-block h-3 w-3 shrink-0 rounded-full border border-border"
-                style={{ backgroundColor: o.color ?? "#cbd5e1" }}
-                aria-hidden
-              />
-              <span className="w-40 text-sm">{o.name}</span>
-              <input name="outWeight" type="number" step="0.1" min="0" defaultValue={0} aria-label={`${o.name} kg`} className={`${inputClass} w-28 py-1.5`} />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div>
-          <label htmlFor={`out-${jobId}`} className="mb-0.5 block text-xs text-muted">Good output (kg)</label>
-          <input id={`out-${jobId}`} name="weightOutKg" type="number" step="0.1" min="0" required className={`${inputClass} w-40 py-1.5`} />
-        </div>
-      )}
+      <p className="text-xs font-medium text-muted">Scale out each output material (kg)</p>
+      <div className="flex flex-col gap-1.5">
+        {outputs.map((o) => (
+          <div key={o.id} className="flex items-center gap-2">
+            <input type="hidden" name="outputMaterialTypeId" value={o.id} />
+            <span className="inline-block h-3 w-3 shrink-0 rounded-full border border-border" style={{ backgroundColor: o.color ?? "#cbd5e1" }} aria-hidden />
+            <span className="w-40 text-sm">{o.name}</span>
+            <input name="outWeight" type="number" step="0.1" min="0" defaultValue={0} aria-label={`${o.name} kg`} className={`${inputClass} w-28 py-1.5`} />
+          </div>
+        ))}
+        {outputs.length === 0 && <p className="text-xs text-destructive">No recipe outputs defined for this stage/material.</p>}
+      </div>
       <div className="flex items-end gap-2">
         <div>
           <label htmlFor={`waste-${jobId}`} className="mb-0.5 block text-xs text-muted">Waste (kg)</label>
@@ -150,9 +139,6 @@ export function ResolveJobForm({ jobId }: { jobId: string }) {
           {pending ? "Resolving…" : "Resolve & release"}
         </button>
       </div>
-      <p className="text-xs text-muted">
-        Charges are valued at the material&apos;s cost per kg and appear on the next payroll as a deduction.
-      </p>
       {state.error && <p role="alert" className="text-xs text-destructive">{state.error}</p>}
     </form>
   );

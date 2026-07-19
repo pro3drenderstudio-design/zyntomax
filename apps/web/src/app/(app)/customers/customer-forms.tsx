@@ -53,8 +53,8 @@ export function PriceForm({
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2">
       <div className="min-w-40 flex-1">
-        <label htmlFor="pr-product" className="mb-0.5 block text-xs text-muted">Product</label>
-        <select id="pr-product" name="productId" required className={`${inputClass} py-1.5`} defaultValue="">
+        <label htmlFor="pr-material" className="mb-0.5 block text-xs text-muted">Finished material</label>
+        <select id="pr-material" name="materialTypeId" required className={`${inputClass} py-1.5`} defaultValue="">
           <option value="" disabled>— Select —</option>
           {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>

@@ -562,22 +562,34 @@ model SupplierPayment {
 
 // ─────────────────── Materials, Inventory & Production ───────────────────
 
-model MaterialType {
-  id     String  @id @default(cuid())
-  name   String  @unique
-  active Boolean @default(true)
+enum MaterialKind {
+  RAW // purchased / collected (pre-processing)
+  INTERMEDIATE // produced by a stage, consumed by another (in processing)
+  FINISHED // produced by an end-of-line stage, sellable
+}
 
-  routes              MaterialRoute[]
+// The universal material catalog: raw stock, intermediate sub-streams, and
+// finished goods are all materials, distinguished by `kind`.
+model MaterialType {
+  id     String       @id @default(cuid())
+  name   String       @unique
+  kind   MaterialKind @default(RAW)
+  color  String?
+  active Boolean      @default(true)
+
   weighIns            CollectionWeighIn[]
   purchaseItems       PurchaseBatchItem[]
   reconciliationItems TripReconciliationItem[]
-  jobs                Job[]
+  jobs                Job[] // as a job's INPUT material
+  jobOutputs          JobOutput[] // as a job's OUTPUT material
   movements           InventoryMovement[]
-  products            Product[]
   rateCards           RateCard[]
   vendorRates         VendorRate[]
   targets             Target[]
-  stageOutputs        StageOutput[]
+  recipesAsInput      StageOutput[]           @relation("RecipeInput")
+  recipesAsOutput     StageOutput[]           @relation("RecipeOutput")
+  priceLists          PriceList[]
+  saleItems           SalesOrderItem[]
 }
 
 enum PayBasis {
@@ -591,66 +603,37 @@ model ProcessStage {
   active   Boolean  @default(true)
   payBasis PayBasis @default(SCALE_OUT)
 
-  routes    MaterialRoute[]
   jobs      Job[]
   locations InventoryLocation[]
   rateCards RateCard[]
-  outputs   StageOutput[]
+  recipes   StageOutput[]
 }
 
-// The distinct output materials a stage produces for a given input material,
-// with an optional colour tag. E.g. Sorting + PET → "PET caps", "Pre-baled PET".
-// Dynamic: admins define these per stage/material in Materials & Stages.
+// A recipe row: at `stage`, input material yields output material.
+// A (stage, input) pair with several rows = several outputs (e.g. Sorting +
+// General Plastics → PP White, PP Blue, HDPE, Masterbatch).
 model StageOutput {
-  id             String  @id @default(cuid())
-  stageId        String
-  materialTypeId String // the INPUT material this output derives from
-  name           String
-  color          String? // hex tag for the admin UI
-  active         Boolean @default(true)
+  id                   String  @id @default(cuid())
+  stageId              String
+  inputMaterialTypeId  String
+  outputMaterialTypeId String
+  active               Boolean @default(true)
 
-  stage        ProcessStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  materialType MaterialType @relation(fields: [materialTypeId], references: [id])
-  jobOutputs   JobOutput[]
-  movements    InventoryMovement[]
-  saleItems    SalesOrderItem[]
+  stage          ProcessStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  inputMaterial  MaterialType @relation("RecipeInput", fields: [inputMaterialTypeId], references: [id])
+  outputMaterial MaterialType @relation("RecipeOutput", fields: [outputMaterialTypeId], references: [id])
 
-  @@index([stageId, materialTypeId])
-}
-
-model MaterialRoute {
-  id             String @id @default(cuid())
-  materialTypeId String
-  stageId        String
-  sequence       Int
-
-  materialType MaterialType @relation(fields: [materialTypeId], references: [id])
-  stage        ProcessStage @relation(fields: [stageId], references: [id])
-
-  @@unique([materialTypeId, sequence])
-  @@unique([materialTypeId, stageId])
-}
-
-model Product {
-  id             String  @id @default(cuid())
-  materialTypeId String
-  name           String  @unique // e.g. "PET Pellets"
-  form           String // pellets | flakes | bale | ingot
-  active         Boolean @default(true)
-
-  materialType MaterialType     @relation(fields: [materialTypeId], references: [id])
-  priceLists   PriceList[]
-  orderItems   SalesOrderItem[]
-  dispatchItems DispatchItem[]
-  movements    InventoryMovement[]
+  @@unique([stageId, inputMaterialTypeId, outputMaterialTypeId])
+  @@index([stageId, inputMaterialTypeId])
 }
 
 enum LocationKind {
-  INTAKE
-  STAGE_WIP
+  INTAKE // raw materials (pre-processing)
+  IN_PROCESSING // intermediate materials produced, awaiting the next stage
+  STAGE_WIP // material actively being worked in a job at a stage
   FINISHED_STORE
   VEHICLE
-  CUSTOMER // terminal location for dispatches
+  CUSTOMER // terminal location for sales
   VENDOR_GATE // origin location for collections
   WASTE // terminal location for scaled-out waste
 }
@@ -675,19 +658,18 @@ enum MovementRefType {
   TRIP
   PURCHASE_BATCH
   JOB
-  DISPATCH
+  SALE
   TRANSFER
   ADJUSTMENT
 }
 
-// Append-only. Corrections are reversing entries.
+// Append-only. Corrections are reversing entries. Every material (raw,
+// intermediate, finished) is keyed by materialTypeId.
 model InventoryMovement {
   id             String          @id @default(cuid())
   fromLocationId String?
   toLocationId   String?
   materialTypeId String?
-  productId      String?
-  stageOutputId  String?
   weightKg       Decimal         @db.Decimal(10, 2)
   lotNo          String?
   refType        MovementRefType
@@ -699,8 +681,6 @@ model InventoryMovement {
   fromLocation InventoryLocation? @relation("MoveFrom", fields: [fromLocationId], references: [id])
   toLocation   InventoryLocation? @relation("MoveTo", fields: [toLocationId], references: [id])
   materialType MaterialType?      @relation(fields: [materialTypeId], references: [id])
-  product      Product?           @relation(fields: [productId], references: [id])
-  stageOutput  StageOutput?       @relation(fields: [stageOutputId], references: [id])
 
   @@index([refType, refId])
   @@index([lotNo])
@@ -747,16 +727,16 @@ model Job {
   @@index([lotNo])
 }
 
-// A scaled-out output line for a job, mapped to one of the stage's defined
-// outputs. Sum of a job's outputs + waste + discrepancy = weightIn.
+// A scaled-out output line for a job: how much of each output material was
+// produced. Sum of a job's outputs + waste + discrepancy = weightIn.
 model JobOutput {
-  id            String  @id @default(cuid())
-  jobId         String
-  stageOutputId String
-  weightKg      Decimal @db.Decimal(10, 2)
+  id                   String  @id @default(cuid())
+  jobId                String
+  outputMaterialTypeId String
+  weightKg             Decimal @db.Decimal(10, 2)
 
-  job         Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  stageOutput StageOutput @relation(fields: [stageOutputId], references: [id])
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  outputMaterial MaterialType @relation(fields: [outputMaterialTypeId], references: [id])
 
   @@index([jobId])
 }
@@ -925,91 +905,54 @@ model Customer {
 }
 
 model PriceList {
-  id            String   @id @default(cuid())
-  productId     String
-  customerId    String? // null = list price; set = customer override
-  pricePerKg    Decimal  @db.Decimal(12, 2)
-  effectiveFrom DateTime @default(now())
+  id             String   @id @default(cuid())
+  materialTypeId String // a FINISHED material
+  customerId     String? // null = list price; set = customer override
+  pricePerKg     Decimal  @db.Decimal(12, 2)
+  effectiveFrom  DateTime @default(now())
 
-  product  Product   @relation(fields: [productId], references: [id])
-  customer Customer? @relation(fields: [customerId], references: [id])
+  materialType MaterialType @relation(fields: [materialTypeId], references: [id])
+  customer     Customer?    @relation(fields: [customerId], references: [id])
 
-  @@index([productId, effectiveFrom])
+  @@index([materialTypeId, effectiveFrom])
 }
 
 enum SalesOrderStatus {
   DRAFT
-  CONFIRMED // reserves finished goods
-  PARTIALLY_DISPATCHED
-  DISPATCHED
+  CONFIRMED
   CLOSED
   CANCELLED
 }
 
 model SalesOrder {
-  id         String           @id @default(cuid())
-  siteId     String
-  customerId String
-  orderNo    String           @unique
-  status     SalesOrderStatus @default(DRAFT)
+  id          String           @id @default(cuid())
+  siteId      String
+  customerId  String
+  orderNo     String           @unique
+  status      SalesOrderStatus @default(DRAFT)
   createdById String?
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  site       Site             @relation(fields: [siteId], references: [id])
-  customer   Customer         @relation(fields: [customerId], references: [id])
-  items      SalesOrderItem[]
-  dispatches Dispatch[]
-  invoice    Invoice?
+  site     Site             @relation(fields: [siteId], references: [id])
+  customer Customer         @relation(fields: [customerId], references: [id])
+  items    SalesOrderItem[]
+  invoice  Invoice?
 
   @@index([siteId, status])
 }
 
 model SalesOrderItem {
-  id            String  @id @default(cuid())
-  orderId       String
-  productId     String? // finished-goods product
-  stageOutputId String? // sorted/processed output (e.g. HDPE, PP)
-  description   String? // used for non-inventory lines
-  isInventory   Boolean @default(true)
-  qtyKg         Decimal @db.Decimal(10, 2)
-  unitPrice     Decimal @db.Decimal(12, 2) // custom per sale (defaults from price list)
+  id             String  @id @default(cuid())
+  orderId        String
+  materialTypeId String? // a FINISHED material (null for non-inventory lines)
+  description    String? // used for non-inventory lines
+  isInventory    Boolean @default(true)
+  qtyKg          Decimal @db.Decimal(10, 2)
+  unitPrice      Decimal @db.Decimal(12, 2) // custom per sale (defaults from price list)
 
-  order       SalesOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product     Product?     @relation(fields: [productId], references: [id])
-  stageOutput StageOutput? @relation(fields: [stageOutputId], references: [id])
-}
-
-enum DispatchStatus {
-  LOADING
-  DEPARTED
-  DELIVERED
-}
-
-model Dispatch {
-  id           String         @id @default(cuid())
-  orderId      String
-  waybillNo    String         @unique
-  vehicle      String?
-  driverName   String?
-  gatePhotoUrl String?
-  status       DispatchStatus @default(LOADING)
-  dispatchedAt DateTime       @default(now())
-
-  order   SalesOrder     @relation(fields: [orderId], references: [id])
-  items   DispatchItem[]
-  invoice Invoice?
-}
-
-model DispatchItem {
-  id         String  @id @default(cuid())
-  dispatchId String
-  productId  String
-  weightKg   Decimal @db.Decimal(10, 2) // scaled at gate; this is the invoiced weight
-  photoUrl   String?
-
-  dispatch Dispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
-  product  Product  @relation(fields: [productId], references: [id])
+  order        SalesOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  materialType MaterialType? @relation(fields: [materialTypeId], references: [id])
 }
 
 enum InvoiceStatus {
@@ -1021,16 +964,14 @@ enum InvoiceStatus {
 
 model Invoice {
   id           String        @id @default(cuid())
-  dispatchId   String?       @unique // legacy dispatch-based invoices
-  salesOrderId String?       @unique // direct-sale invoices (current flow)
+  salesOrderId String        @unique
   invoiceNo    String        @unique
   amount       Decimal       @db.Decimal(14, 2)
   dueDate      DateTime
   status       InvoiceStatus @default(UNPAID)
   createdAt    DateTime      @default(now())
 
-  dispatch   Dispatch?         @relation(fields: [dispatchId], references: [id])
-  salesOrder SalesOrder?       @relation(fields: [salesOrderId], references: [id])
+  salesOrder SalesOrder        @relation(fields: [salesOrderId], references: [id])
   payments   CustomerPayment[]
 }
 

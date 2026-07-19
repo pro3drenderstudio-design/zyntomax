@@ -21,7 +21,8 @@ E2E business-loop test: see README "Verification" (needs ADMIN_ID env var, hits 
 ## Architecture rules
 
 - **Ledgers are append-only.** Never store or hand-edit a balance; inventory = `InventoryMovement` sums, money = `WalletTransaction` sums. Corrections are reversing entries. `lib/inventory.ts` computes balances.
-- **Every operational table carries `siteId`** (multi-site). Master data (materials, stages, products, roles, customers, suppliers) is global; rates/tolerances/settings are global-with-site-override.
+- **One material catalog, three kinds** (`MaterialType.kind`: RAW / INTERMEDIATE / FINISHED). Production transforms materials via **recipes** (`StageOutput`: stage + input material → output material; a stage can branch one input into several outputs). A job consumes its input and produces the recipe's outputs, mass-balanced (Σoutputs + waste + discrepancy = weightIn). **Only FINISHED materials are sellable.** Inventory has three buckets keyed by location kind: INTAKE = raw, IN_PROCESSING/STAGE_WIP = in processing (intermediates, incl. mid-line outputs), FINISHED_STORE = finished. See `PRODUCTION_MODEL.md` and `inventoryBuckets()` in `lib/inventory.ts`.
+- **Every operational table carries `siteId`** (multi-site). Master data (materials, stages, recipes, roles, customers, suppliers) is global; rates/tolerances/settings are global-with-site-override.
 - **Rates snapshot at transaction time** (`ratePerKg`, `unitPrice`, `toleranceSnapshot`) — history must never recalculate when a rate changes.
 - Vendors are paid on **field weigh-in amounts**; staff wages on **good output kg × rate card** (see `lib/wages.ts`).
 - Money movements need **idempotency keys**; the mobile sync dedupes on `clientUuid`.

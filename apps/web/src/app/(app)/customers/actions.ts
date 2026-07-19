@@ -44,18 +44,18 @@ export async function setListPrice(
   formData: FormData,
 ): Promise<FormState> {
   const session = await requireRole(["SALES_ADMIN", "FINANCE_ADMIN"]);
-  const productId = String(formData.get("productId") ?? "");
+  const materialTypeId = String(formData.get("materialTypeId") ?? "");
   const price = Number(formData.get("pricePerKg"));
-  if (!productId || !price || price <= 0) return { error: "Enter a valid price." };
+  if (!materialTypeId || !price || price <= 0) return { error: "Enter a valid price." };
 
   await prisma.priceList.create({
-    data: { productId, pricePerKg: price },
+    data: { materialTypeId, pricePerKg: price },
   });
   await audit({
     actorId: session.userId,
     action: "price.set",
-    entity: "Product",
-    entityId: productId,
+    entity: "MaterialType",
+    entityId: materialTypeId,
     after: { pricePerKg: price },
   });
   revalidatePath("/customers");

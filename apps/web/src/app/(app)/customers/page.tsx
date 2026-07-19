@@ -19,8 +19,8 @@ export default async function CustomersPage() {
       },
       orderBy: { name: "asc" },
     }),
-    prisma.product.findMany({
-      where: { active: true },
+    prisma.materialType.findMany({
+      where: { active: true, kind: "FINISHED" },
       include: {
         priceLists: {
           where: { customerId: null },

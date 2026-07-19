@@ -1,6 +1,6 @@
 # Zyntomax Platform
 
-All-in-one operations platform for Zyntomax Ventures Limited: household waste collection, raw material purchasing, factory production, sales & dispatch, HR & piece-rate wages, and finance — multi-site from day one.
+All-in-one operations platform for Zyntomax Ventures Limited: household waste collection, raw material purchasing, factory production, sales, HR & piece-rate wages, and finance — multi-site from day one.
 
 Full design rationale: [SYSTEM_DESIGN.md](./SYSTEM_DESIGN.md).
 

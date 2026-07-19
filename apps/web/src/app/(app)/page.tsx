@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@zyntomax/db";
 import { requireSession, accessibleSiteIds } from "@/lib/auth";
-import { locationBalances } from "@/lib/inventory";
+import { inventoryBuckets } from "@/lib/inventory";
 import { PageHeader, StatCard, Card, Badge, statusTone, formatKg, formatNaira } from "@/components/ui";
 import { startOfMonth, startOfDay } from "date-fns";
 
@@ -19,7 +19,7 @@ export default async function DashboardPage() {
     activeTrips,
     todayCollected,
     flaggedJobs,
-    balances,
+    buckets,
     walletAgg,
     pendingBatches,
     monthOutput,
@@ -42,7 +42,7 @@ export default async function DashboardPage() {
       where: { createdAt: { gte: dayStart }, trip: siteWhere },
     }),
     prisma.job.count({ where: { ...siteWhere, status: "FLAGGED" } }),
-    locationBalances(siteIds),
+    inventoryBuckets(siteIds),
     prisma.walletTransaction.aggregate({ _sum: { amount: true } }),
     prisma.payoutBatch.findMany({
       where: { status: { in: ["AWAITING_FUNDS", "READY", "PROCESSING", "PARTIAL_FAILED"] } },
@@ -71,15 +71,10 @@ export default async function DashboardPage() {
     }),
   ]);
 
-  const wipTotal = balances
-    .filter((b) => b.kind === "STAGE_WIP")
-    .reduce((s, b) => s + b.totalKg, 0);
-  const intakeTotal = balances
-    .filter((b) => b.kind === "INTAKE")
-    .reduce((s, b) => s + b.totalKg, 0);
-  const finishedTotal = balances
-    .filter((b) => b.kind === "FINISHED_STORE")
-    .reduce((s, b) => s + b.totalKg, 0);
+  const sumKg = (arr: { kg: number }[]) => arr.reduce((s, m) => s + m.kg, 0);
+  const wipTotal = sumKg(buckets.waiting) + buckets.active.reduce((s, st) => s + sumKg(st.materials), 0);
+  const intakeTotal = sumKg(buckets.raw);
+  const finishedTotal = sumKg(buckets.finished);
 
   const walletBalance = Number(walletAgg._sum.amount ?? 0);
   const outputKg = Number(monthOutput._sum.weightKg ?? 0);
@@ -218,7 +213,7 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {balances.filter((b) => b.kind === "STAGE_WIP" && b.totalKg > 0).length > 0 && (
+      {buckets.active.length > 0 && (
         <Card className="mt-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-medium">Material in each stage</h2>
@@ -227,14 +222,14 @@ export default async function DashboardPage() {
             </Link>
           </div>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {balances
-              .filter((b) => b.kind === "STAGE_WIP" && b.totalKg > 0)
-              .map((b) => (
-                <div key={b.locationId} className="rounded-md bg-muted-bg px-3 py-2">
-                  <p className="text-xs text-muted">{b.stageName ?? b.name}</p>
-                  <p className="tabular text-lg font-semibold">{formatKg(b.totalKg)}</p>
-                </div>
-              ))}
+            {buckets.active.map((st) => (
+              <div key={st.stageId} className="rounded-md bg-muted-bg px-3 py-2">
+                <p className="text-xs text-muted">{st.stageName}</p>
+                <p className="tabular text-lg font-semibold">
+                  {formatKg(st.materials.reduce((s, m) => s + m.kg, 0))}
+                </p>
+              </div>
+            ))}
           </div>
         </Card>
       )}

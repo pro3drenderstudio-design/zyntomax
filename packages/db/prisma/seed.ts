@@ -73,18 +73,41 @@ async function main() {
     );
   }
 
-  // ── Material types, stages, routes, products ───────────────────────
-  const materialNames = ["PET", "General Plastics", "Tin Can", "Iron", "Aluminium"];
+  // ── Materials (RAW / INTERMEDIATE / FINISHED), stages, recipes ─────
+  type Kind = "RAW" | "INTERMEDIATE" | "FINISHED";
+  const materialDefs: { name: string; kind: Kind; color?: string }[] = [
+    // Raw
+    { name: "PET", kind: "RAW", color: "#0ea5e9" },
+    { name: "General Plastics", kind: "RAW", color: "#64748b" },
+    { name: "Tin Can", kind: "RAW", color: "#a3a3a3" },
+    { name: "Iron", kind: "RAW", color: "#78716c" },
+    { name: "Aluminium", kind: "RAW", color: "#94a3b8" },
+    // Intermediate (produced by sorting/crushing/washing)
+    { name: "Sorted PET", kind: "INTERMEDIATE", color: "#22c55e" },
+    { name: "Crushed PET", kind: "INTERMEDIATE", color: "#16a34a" },
+    { name: "Washed PET", kind: "INTERMEDIATE", color: "#15803d" },
+    { name: "PP White", kind: "INTERMEDIATE", color: "#e2e8f0" },
+    { name: "PP Blue", kind: "INTERMEDIATE", color: "#3b82f6" },
+    { name: "HDPE", kind: "INTERMEDIATE", color: "#f59e0b" },
+    { name: "Masterbatch", kind: "INTERMEDIATE", color: "#a855f7" },
+    { name: "Sorted Tin", kind: "INTERMEDIATE", color: "#d4d4d4" },
+    // Finished (sellable)
+    { name: "PET Pellets", kind: "FINISHED", color: "#065f46" },
+    { name: "Crushed HDPE", kind: "FINISHED", color: "#b45309" },
+    { name: "Crushed PP Blue", kind: "FINISHED", color: "#1d4ed8" },
+    { name: "Crushed PP White", kind: "FINISHED", color: "#cbd5e1" },
+    { name: "Tin Bales", kind: "FINISHED", color: "#737373" },
+  ];
   const materials: Record<string, { id: string }> = {};
-  for (const name of materialNames) {
-    materials[name] = await prisma.materialType.upsert({
-      where: { name },
-      update: {},
-      create: { name },
+  for (const m of materialDefs) {
+    materials[m.name] = await prisma.materialType.upsert({
+      where: { name: m.name },
+      update: { kind: m.kind, color: m.color },
+      create: { name: m.name, kind: m.kind, color: m.color },
     });
   }
 
-  const stageNames = ["Sorting", "Post-Sorting", "Crushing", "Washing", "Pelletizing", "Baling"];
+  const stageNames = ["Sorting", "Crushing", "Washing", "Pelletizing", "Baling"];
   const stages: Record<string, { id: string }> = {};
   for (const name of stageNames) {
     stages[name] = await prisma.processStage.upsert({
@@ -93,79 +116,50 @@ async function main() {
       create: { name },
     });
   }
+  // Sorters paid on what they're handed (scale-in); others on output
+  await prisma.processStage.update({ where: { id: stages["Sorting"].id }, data: { payBasis: "SCALE_IN" } });
 
-  const routes: Record<string, string[]> = {
-    PET: ["Sorting", "Crushing", "Washing", "Pelletizing"],
-    "General Plastics": ["Sorting", "Crushing", "Pelletizing"],
-    "Tin Can": ["Sorting", "Baling"],
-    Iron: ["Sorting", "Baling"],
-    Aluminium: ["Sorting", "Baling"],
-  };
-  for (const [mat, stageList] of Object.entries(routes)) {
-    for (let i = 0; i < stageList.length; i++) {
-      await prisma.materialRoute.upsert({
-        where: {
-          materialTypeId_stageId: {
-            materialTypeId: materials[mat].id,
-            stageId: stages[stageList[i]].id,
-          },
-        },
-        update: { sequence: i + 1 },
-        create: {
-          materialTypeId: materials[mat].id,
-          stageId: stages[stageList[i]].id,
-          sequence: i + 1,
-        },
-      });
-    }
-  }
-
-  // Stage outputs (dynamic, colour-tagged) + pay basis — demo
-  await prisma.processStage.update({
-    where: { id: stages["Sorting"].id },
-    data: { payBasis: "SCALE_IN" }, // sorters paid on what they're handed
-  });
-  const stageOutputDefs = [
-    { stage: "Sorting", material: "PET", name: "PET caps", color: "#3b82f6" },
-    { stage: "Sorting", material: "PET", name: "Pre-baled PET", color: "#22c55e" },
-    { stage: "Sorting", material: "General Plastics", name: "HDPE", color: "#f59e0b" },
-    { stage: "Sorting", material: "General Plastics", name: "PP", color: "#ef4444" },
+  // Recipes: (stage, input material) → output material
+  const recipes: { stage: string; input: string; output: string }[] = [
+    // PET line (linear)
+    { stage: "Sorting", input: "PET", output: "Sorted PET" },
+    { stage: "Crushing", input: "Sorted PET", output: "Crushed PET" },
+    { stage: "Washing", input: "Crushed PET", output: "Washed PET" },
+    { stage: "Pelletizing", input: "Washed PET", output: "PET Pellets" },
+    // General Plastics (branching): sorting yields several sub-streams
+    { stage: "Sorting", input: "General Plastics", output: "PP White" },
+    { stage: "Sorting", input: "General Plastics", output: "PP Blue" },
+    { stage: "Sorting", input: "General Plastics", output: "HDPE" },
+    { stage: "Sorting", input: "General Plastics", output: "Masterbatch" },
+    { stage: "Crushing", input: "HDPE", output: "Crushed HDPE" },
+    { stage: "Crushing", input: "PP Blue", output: "Crushed PP Blue" },
+    { stage: "Crushing", input: "PP White", output: "Crushed PP White" },
+    // Metals
+    { stage: "Sorting", input: "Tin Can", output: "Sorted Tin" },
+    { stage: "Baling", input: "Sorted Tin", output: "Tin Bales" },
   ];
-  for (const o of stageOutputDefs) {
-    const exists = await prisma.stageOutput.findFirst({
-      where: { stageId: stages[o.stage].id, materialTypeId: materials[o.material].id, name: o.name },
-    });
-    if (!exists) {
-      await prisma.stageOutput.create({
-        data: {
-          stageId: stages[o.stage].id,
-          materialTypeId: materials[o.material].id,
-          name: o.name,
-          color: o.color,
+  for (const r of recipes) {
+    await prisma.stageOutput.upsert({
+      where: {
+        stageId_inputMaterialTypeId_outputMaterialTypeId: {
+          stageId: stages[r.stage].id,
+          inputMaterialTypeId: materials[r.input].id,
+          outputMaterialTypeId: materials[r.output].id,
         },
-      });
-    }
-  }
-
-  const productDefs = [
-    { name: "PET Pellets", material: "PET", form: "pellets" },
-    { name: "Plastic Pellets", material: "General Plastics", form: "pellets" },
-    { name: "Tin Bales", material: "Tin Can", form: "bale" },
-    { name: "Iron Bales", material: "Iron", form: "bale" },
-    { name: "Aluminium Bales", material: "Aluminium", form: "bale" },
-  ];
-  const products: Record<string, { id: string }> = {};
-  for (const p of productDefs) {
-    products[p.name] = await prisma.product.upsert({
-      where: { name: p.name },
+      },
       update: {},
-      create: { name: p.name, form: p.form, materialTypeId: materials[p.material].id },
+      create: {
+        stageId: stages[r.stage].id,
+        inputMaterialTypeId: materials[r.input].id,
+        outputMaterialTypeId: materials[r.output].id,
+      },
     });
   }
 
   // ── Inventory locations ─────────────────────────────────────────────
   const locDefs = [
     { kind: "INTAKE" as const, name: "Factory Intake" },
+    { kind: "IN_PROCESSING" as const, name: "In-Processing Store" },
     { kind: "FINISHED_STORE" as const, name: "Finished Goods Store" },
     { kind: "VEHICLE" as const, name: "Collection Vehicle" },
     { kind: "VENDOR_GATE" as const, name: "Vendor Gate" },
@@ -177,64 +171,44 @@ async function main() {
       where: { siteId: site.id, kind: d.kind, stageId: null, name: d.name },
     });
     if (!exists) {
-      await prisma.inventoryLocation.create({
-        data: { siteId: site.id, kind: d.kind, name: d.name },
-      });
+      await prisma.inventoryLocation.create({ data: { siteId: site.id, kind: d.kind, name: d.name } });
     }
   }
-  for (const s of Object.values(stageNames)) {
+  for (const s of stageNames) {
     const exists = await prisma.inventoryLocation.findFirst({
       where: { siteId: site.id, kind: "STAGE_WIP", stageId: stages[s].id },
     });
     if (!exists) {
       await prisma.inventoryLocation.create({
-        data: { siteId: site.id, kind: "STAGE_WIP", stageId: stages[s].id, name: `${s} WIP` },
+        data: { siteId: site.id, kind: "STAGE_WIP", stageId: stages[s].id, name: `${s} (active)` },
       });
     }
   }
 
   // ── Rates ───────────────────────────────────────────────────────────
+  // Vendor (collection) prices — RAW materials only
   const vendorRates: Record<string, number> = {
-    PET: 200,
-    "General Plastics": 150,
-    "Tin Can": 120,
-    Iron: 180,
-    Aluminium: 800,
+    PET: 200, "General Plastics": 150, "Tin Can": 120, Iron: 180, Aluminium: 800,
   };
   for (const [mat, price] of Object.entries(vendorRates)) {
-    const existing = await prisma.vendorRate.findFirst({
-      where: { materialTypeId: materials[mat].id },
-    });
-    if (!existing) {
-      await prisma.vendorRate.create({
-        data: { materialTypeId: materials[mat].id, pricePerKg: price },
-      });
-    }
+    const existing = await prisma.vendorRate.findFirst({ where: { materialTypeId: materials[mat].id } });
+    if (!existing) await prisma.vendorRate.create({ data: { materialTypeId: materials[mat].id, pricePerKg: price } });
   }
 
-  // Piece rates: ₦/kg per stage per material
-  const pieceRates: Record<string, number> = {
-    Sorting: 10,
-    "Post-Sorting": 8,
-    Crushing: 12,
-    Washing: 8,
-    Pelletizing: 15,
-    Baling: 10,
+  // Piece rates: ₦/kg per (stage × input material) — one per recipe input
+  const stageRate: Record<string, number> = {
+    Sorting: 10, Crushing: 12, Washing: 8, Pelletizing: 15, Baling: 10,
   };
-  for (const [stage, rate] of Object.entries(pieceRates)) {
-    for (const mat of materialNames) {
-      const existing = await prisma.rateCard.findFirst({
-        where: { stageId: stages[stage].id, materialTypeId: materials[mat].id, siteId: null },
+  const rateInputs = new Set(recipes.map((r) => `${r.stage}::${r.input}`));
+  for (const key of rateInputs) {
+    const [stage, input] = key.split("::");
+    const existing = await prisma.rateCard.findFirst({
+      where: { stageId: stages[stage].id, materialTypeId: materials[input].id, siteId: null },
+    });
+    if (!existing) {
+      await prisma.rateCard.create({
+        data: { stageId: stages[stage].id, materialTypeId: materials[input].id, ratePerKg: stageRate[stage] },
       });
-      if (!existing) {
-        await prisma.rateCard.create({
-          data: {
-            stageId: stages[stage].id,
-            materialTypeId: materials[mat].id,
-            ratePerKg: rate,
-          },
-        });
-      }
     }
   }
 
@@ -374,21 +348,21 @@ async function main() {
     if (!existing) await prisma.customer.create({ data: c });
   }
 
-  // Product list prices
+  // List prices for FINISHED materials
   const listPrices: Record<string, number> = {
     "PET Pellets": 950,
-    "Plastic Pellets": 700,
+    "Crushed HDPE": 700,
+    "Crushed PP Blue": 720,
+    "Crushed PP White": 680,
     "Tin Bales": 350,
-    "Iron Bales": 400,
-    "Aluminium Bales": 1500,
   };
-  for (const [prod, price] of Object.entries(listPrices)) {
+  for (const [mat, price] of Object.entries(listPrices)) {
     const existing = await prisma.priceList.findFirst({
-      where: { productId: products[prod].id, customerId: null },
+      where: { materialTypeId: materials[mat].id, customerId: null },
     });
     if (!existing) {
       await prisma.priceList.create({
-        data: { productId: products[prod].id, pricePerKg: price },
+        data: { materialTypeId: materials[mat].id, pricePerKg: price },
       });
     }
   }

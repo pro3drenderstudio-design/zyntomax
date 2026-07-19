@@ -18,7 +18,7 @@ export default async function SaleDetailPage({
     where: { id },
     include: {
       customer: true,
-      items: { include: { product: true, stageOutput: true } },
+      items: { include: { materialType: true } },
       invoice: { include: { payments: true } },
     },
   });
@@ -48,7 +48,7 @@ export default async function SaleDetailPage({
       <Table headers={["Item", "Type", "Qty", "Unit price", "Line total"]}>
         {order.items.map((i) => (
           <tr key={i.id}>
-            <td className="px-3 py-2 font-medium">{i.isInventory ? (i.product?.name ?? i.stageOutput?.name) : i.description}</td>
+            <td className="px-3 py-2 font-medium">{i.isInventory ? i.materialType?.name : i.description}</td>
             <td className="px-3 py-2">
               {i.isInventory ? <Badge tone="info">Finished goods</Badge> : <Badge tone="neutral">Non-inventory</Badge>}
             </td>

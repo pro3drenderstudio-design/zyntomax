@@ -21,7 +21,7 @@ export default async function JobDetailPage({
       materialType: true,
       site: true,
       assignments: { include: { staff: { include: { user: true } } } },
-      outputs: { include: { stageOutput: true } },
+      outputs: { include: { outputMaterial: true } },
       discrepancyCharges: { include: { staff: { include: { user: true } } } },
       payrollRun: { include: { items: true } },
     },
@@ -113,8 +113,8 @@ export default async function JobDetailPage({
               <tr key={o.id}>
                 <td className="px-3 py-2">
                   <span className="inline-flex items-center gap-2">
-                    <span className="inline-block h-3 w-3 rounded-full border border-border" style={{ backgroundColor: o.stageOutput.color ?? "#cbd5e1" }} aria-hidden />
-                    {o.stageOutput.name}
+                    <span className="inline-block h-3 w-3 rounded-full border border-border" style={{ backgroundColor: o.outputMaterial.color ?? "#cbd5e1" }} aria-hidden />
+                    {o.outputMaterial.name}
                   </span>
                 </td>
                 <td className="tabular px-3 py-2 font-medium">{formatKg(Number(o.weightKg))}</td>
