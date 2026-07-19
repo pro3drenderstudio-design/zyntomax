@@ -43,23 +43,27 @@ export default async function PayrollPage() {
         subtitle="Weekly piece-rate wages: good output kg × rate per stage & material. Advances deduct automatically."
       />
 
-      {isFinance && sitesWithoutRun.length > 0 && (
+      {isFinance && (
         <Card className="mb-4">
           <p className="mb-2 text-sm">
-            Open this week&apos;s payroll run (week of{" "}
+            Open or refresh this week&apos;s payroll (week of{" "}
             {thisWeek.toLocaleDateString("en-NG", { day: "numeric", month: "long" })}):
           </p>
           <div className="flex flex-wrap gap-2">
-            {sitesWithoutRun.map((s) => (
-              <form key={s.id} action={createPayrollRun.bind(null, s.id)}>
-                <button type="submit" className={buttonClass}>
-                  Open run — {s.name}
-                </button>
-              </form>
-            ))}
+            {sites.map((s) => {
+              const hasRun = runs.some((r) => r.siteId === s.id && r.weekStart.getTime() === thisWeek.getTime());
+              return (
+                <form key={s.id} action={createPayrollRun.bind(null, s.id)}>
+                  <button type="submit" className={buttonClass}>
+                    {hasRun ? "Refresh" : "Open"} — {s.name}
+                  </button>
+                </form>
+              );
+            })}
           </div>
           <p className="mt-2 text-xs text-muted">
-            Opening a run tallies all completed jobs not yet on a payroll and locks them in.
+            Tallies every completed job not yet on a payroll and adds it to the run — run it again
+            whenever more jobs are completed during the week.
           </p>
         </Card>
       )}

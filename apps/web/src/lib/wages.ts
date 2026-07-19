@@ -37,17 +37,17 @@ export type StaffEarning = {
 };
 
 /**
- * Full weekly earnings per staff, honouring each staff member's wage model:
+ * Outstanding earnings per staff, honouring each staff member's wage model:
  *  - COMMISSION: piece-rate on good output only
  *  - SALARY: weekly base only (no commission)
  *  - COMMISSION_PLUS_BASE: piece-rate + weekly base
- * A stage's rate card can be based on scale-in or scale-out (see rateBasisKg).
+ * A stage's rate card can be based on scale-in or scale-out.
+ *
+ * Commission covers ALL completed jobs not yet stamped onto a payroll run
+ * (not just this week's) so nothing falls through the cracks. Base salary is
+ * emitted for eligible staff; the payroll run applies it once per run.
  */
-export async function computeEarnings(
-  siteId: string,
-  from: Date,
-  to: Date,
-): Promise<StaffEarning[]> {
+export async function computeEarnings(siteId: string): Promise<StaffEarning[]> {
   const perStaff = new Map<string, StaffEarning>();
   const ensure = (id: string) => {
     let cur = perStaff.get(id);
@@ -70,13 +70,12 @@ export async function computeEarnings(
   });
   const wageOf = new Map(staffProfiles.map((s) => [s.id, s]));
 
-  // Commission from completed jobs not yet on a payroll
+  // Commission from every completed job not yet on a payroll run
   const jobs = await prisma.job.findMany({
     where: {
       siteId,
       status: { in: ["COMPLETED", "RESOLVED"] },
       payrollRunId: null,
-      completedAt: { gte: from, lt: to },
     },
     include: { assignments: true, stage: true },
   });
