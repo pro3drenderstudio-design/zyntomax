@@ -7,11 +7,15 @@ Full design rationale: [SYSTEM_DESIGN.md](./SYSTEM_DESIGN.md).
 ## Repository layout
 
 ```
-apps/web        Next.js 15 admin (port 3100) + mobile REST API + Paystack webhook
-apps/field      Expo (React Native) field app — vendor registration, weigh-ins, offline outbox
+apps/web        Next.js 15 admin (port 3100) + mobile/vendor REST APIs + Paystack webhook
+apps/field      Expo field app — registration, weigh-ins, pickups + navigation,
+                offline outbox, live location, and admin-on-the-go (role-gated)
+apps/vendor     Expo vendor app — OTP login, request pickup, collections, payments, rewards
 packages/db     Prisma schema + client + seed (source of truth for the data model)
 design-system/  Generated design tokens (ui-ux-pro-max)
 ```
+
+Brand colours are pulled from `logo.png` (forest green `#008037` + lime `#7ED957`).
 
 ## Getting started
 
@@ -46,14 +50,17 @@ pnpm --filter @zyntomax/web dev    # http://localhost:3100
 
 Staff registered through the app sign in with their phone number as the initial password.
 
-## Field app (Expo)
+## Mobile apps (Expo)
+
+The apps derive the API URL from the Metro host in dev, so scanning the Expo Go URL just works on the same Wi-Fi (override via `expo.extra.apiUrl` in each `app.json` for production).
 
 ```bash
-# Set the API URL to your machine's LAN IP in apps/field/app.json → expo.extra.apiUrl
-pnpm --filter @zyntomax/field dev   # scan the QR with Expo Go (Android)
+pnpm --filter @zyntomax/field dev    # staff + admin — scan with Expo Go (Android)
+pnpm --filter @zyntomax/vendor dev   # household vendors — separate Expo Go app
 ```
 
-Registration and weigh-ins work offline: records land in an outbox (AsyncStorage) with client-generated UUIDs and sync when connectivity returns — the server dedupes on UUID so retries are always safe.
+- **Field app** (staff): vendor registration, weigh-ins, pickup requests with turn-by-turn navigation, offline outbox (AsyncStorage + client UUIDs; server dedupes so retries are safe), live location during trips, and an **Admin overview** (KPIs + trip approvals) for ops/supervisor/finance.
+- **Vendor app** (household vendors): **OTP phone login** (no passwords), request pickup (min-weight enforced), collection history, payments, and rewards progress. When no SMS provider is configured, the login code is surfaced in the response so the flow is testable in dev.
 
 ## Core invariants (do not break)
 
@@ -84,9 +91,10 @@ Both must report all checks passing. The e2e route (`/api/dev/e2e`) is disabled 
 
 Dev runs in **simulation mode** while `PAYSTACK_SECRET_KEY` contains `placeholder` — transfers succeed instantly without hitting Paystack. Put real test keys in `apps/web/.env` to exercise the live API, and point a webhook at `/api/webhooks/paystack` (signature-verified).
 
-## Deliberately deferred
+## Notes / future hardening
 
-- Vendor self-service app (agent-assisted flow + SMS covers vendors; see SYSTEM_DESIGN.md §2)
-- Factory scale stations currently use the responsive admin on shared tablets; a dedicated station mode in the field app can come later
-- Photo capture upload (schema fields exist; S3/R2 wiring pending)
-- BullMQ workers for payout/SMS queues (currently inline; Redis is provisioned)
+- **Uploads** save to `apps/web/public/uploads` in dev (`lib/storage.ts`); swap that module for S3/R2 in production — callers only depend on `saveUpload()` returning a URL.
+- **Paystack**: payouts use the live Transfers API when real keys are set (simulated on `placeholder`). Topping up the Paystack balance is done by bank transfer to your Paystack account; the wallet ledger records it.
+- **Stage outputs** are captured as a colour-tagged composition breakdown over the single-stream inventory ledger; per-output downstream routing is a future enhancement.
+- **BullMQ workers** for payout/SMS queues (currently inline; Redis is provisioned).
+- Google Maps can replace the free OpenStreetMap/MapLibre stack if you add a key.
