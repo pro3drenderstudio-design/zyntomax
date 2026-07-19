@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState } from "react";
-import Image from "next/image";
 import { login, type LoginState } from "./actions";
 
 export default function LoginPage() {
@@ -14,7 +13,8 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2">
-          <Image src="/logo.png" alt="Zyntomax Ventures Limited" width={140} height={140} priority className="h-28 w-28 object-contain" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Zyntomax Ventures Limited" className="h-28 w-28 object-contain" />
           <p className="text-sm font-medium text-muted">Operations Platform</p>
         </div>
 

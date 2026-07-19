@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
@@ -169,7 +168,8 @@ export function Sidebar({ roles }: { roles: string[] }) {
       {/* Mobile top bar */}
       <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-2 print:hidden lg:hidden">
         <span className="flex items-center gap-2 font-semibold">
-          <Image src="/logo.png" alt="Zyntomax" width={28} height={28} className="h-7 w-7 object-contain" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Zyntomax" className="h-7 w-7 object-contain" />
           Zyntomax
         </span>
         <button
@@ -188,7 +188,8 @@ export function Sidebar({ roles }: { roles: string[] }) {
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface print:!hidden lg:flex">
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <Image src="/logo.png" alt="Zyntomax" width={36} height={36} className="h-9 w-9 object-contain" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Zyntomax" className="h-9 w-9 object-contain" />
           <div>
             <p className="text-sm font-semibold leading-tight">Zyntomax</p>
             <p className="text-[11px] text-muted">Operations</p>
