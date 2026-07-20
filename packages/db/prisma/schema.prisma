@@ -107,6 +107,7 @@ model StaffProfile {
   id               String    @id @default(cuid())
   userId           String    @unique
   staffNo          String    @unique
+  title            String? // job title printed on the ID card, e.g. "Sorting Operator"
   wageModel        WageModel @default(COMMISSION)
   baseSalaryWeekly Decimal?  @db.Decimal(14, 2)
   photoUrl         String?
@@ -573,10 +574,11 @@ enum MaterialKind {
 // finished goods are all materials, distinguished by `kind`.
 model MaterialType {
   id     String       @id @default(cuid())
-  name   String       @unique
-  kind   MaterialKind @default(RAW)
-  color  String?
-  active Boolean      @default(true)
+  name     String       @unique
+  kind     MaterialKind @default(RAW)
+  color    String?
+  active   Boolean      @default(true)
+  sellable Boolean      @default(false) // FINISHED goods are always sellable; flag lets an intermediate be sold too
 
   weighIns            CollectionWeighIn[]
   purchaseItems       PurchaseBatchItem[]

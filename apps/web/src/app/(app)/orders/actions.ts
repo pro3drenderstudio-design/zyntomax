@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@zyntomax/db";
 import { requireRole } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { sellableStock } from "@/lib/inventory";
+import { sellableStock, homeLocationKind } from "@/lib/inventory";
 
 export type FormState = { error?: string };
 
@@ -74,7 +74,12 @@ export async function recordSale(
 
   const customer = await prisma.customer.findUniqueOrThrow({ where: { id: customerId } });
   const total = lines.reduce((s, l) => s + l.qtyKg * l.unitPrice, 0);
-  const store = await prisma.inventoryLocation.findFirst({ where: { siteId, kind: "FINISHED_STORE" } });
+  // Sold stock leaves each material's home bucket (finished store, or the
+  // in-processing/intake pool for a flagged-sellable intermediate/raw material).
+  const homeLocs = await prisma.inventoryLocation.findMany({
+    where: { siteId, kind: { in: ["FINISHED_STORE", "IN_PROCESSING", "INTAKE"] } },
+  });
+  const locByKind = new Map(homeLocs.map((l) => [l.kind, l]));
   const customerLoc = await prisma.inventoryLocation.findFirst({ where: { siteId, kind: "CUSTOMER" } });
 
   const order = await prisma.$transaction(async (tx) => {
@@ -97,12 +102,15 @@ export async function recordSale(
       },
     });
 
-    // Deduct finished goods for inventory lines
+    // Deduct sold stock from each material's home bucket
     for (const l of lines) {
-      if (l.isInventory && l.materialTypeId && store && customerLoc) {
+      const src = l.materialTypeId
+        ? locByKind.get(homeLocationKind(availOf.get(l.materialTypeId)?.kind ?? "FINISHED"))
+        : undefined;
+      if (l.isInventory && l.materialTypeId && src && customerLoc) {
         await tx.inventoryMovement.create({
           data: {
-            fromLocationId: store.id,
+            fromLocationId: src.id,
             toLocationId: customerLoc.id,
             materialTypeId: l.materialTypeId,
             weightKg: l.qtyKg,

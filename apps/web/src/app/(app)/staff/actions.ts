@@ -19,6 +19,7 @@ const ROLE_VALUES = [
 
 const staffSchema = z.object({
   name: z.string().min(2),
+  title: z.string().optional(),
   phone: z.string().regex(/^0\d{10}$/, "Enter an 11-digit phone number"),
   email: z.string().email().optional().or(z.literal("")),
   photoUrl: z.string().optional(),
@@ -69,6 +70,7 @@ export async function createStaff(
       staffProfile: {
         create: {
           staffNo: await nextStaffNo(),
+          title: data.title || null,
           photoUrl: data.photoUrl,
           address: data.address,
           hireDate: data.hireDate ? new Date(data.hireDate) : new Date(),
@@ -124,6 +126,7 @@ export async function updateStaff(
     prisma.staffProfile.update({
       where: { id: staffId },
       data: {
+        title: data.title || null,
         photoUrl: data.photoUrl ?? null,
         address: data.address ?? null,
         hireDate: data.hireDate ? new Date(data.hireDate) : staff.hireDate,

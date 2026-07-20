@@ -27,6 +27,45 @@ export async function createMaterialType(
   return {};
 }
 
+/** Delete a material type — only if it has no transaction history. */
+export async function deleteMaterialType(id: string): Promise<FormState> {
+  const session = await requireRole(["OPERATIONS_MANAGER"]);
+  const [movements, jobs, jobOutputs, purchases, weighIns, reconItems, saleItems] = await Promise.all([
+    prisma.inventoryMovement.count({ where: { materialTypeId: id } }),
+    prisma.job.count({ where: { materialTypeId: id } }),
+    prisma.jobOutput.count({ where: { outputMaterialTypeId: id } }),
+    prisma.purchaseBatchItem.count({ where: { materialTypeId: id } }),
+    prisma.collectionWeighIn.count({ where: { materialTypeId: id } }),
+    prisma.tripReconciliationItem.count({ where: { materialTypeId: id } }),
+    prisma.salesOrderItem.count({ where: { materialTypeId: id } }),
+  ]);
+  if (movements + jobs + jobOutputs + purchases + weighIns + reconItems + saleItems > 0) {
+    return { error: "This material has transaction history — deactivate it instead of deleting." };
+  }
+  const mat = await prisma.materialType.findUnique({ where: { id } });
+  if (!mat) return { error: "Material not found." };
+  // Clear config-only references, then delete.
+  await prisma.stageOutput.deleteMany({ where: { OR: [{ inputMaterialTypeId: id }, { outputMaterialTypeId: id }] } });
+  await prisma.priceList.deleteMany({ where: { materialTypeId: id } });
+  await prisma.rateCard.deleteMany({ where: { materialTypeId: id } });
+  await prisma.vendorRate.deleteMany({ where: { materialTypeId: id } });
+  await prisma.target.deleteMany({ where: { materialTypeId: id } });
+  await prisma.materialType.delete({ where: { id } });
+  await audit({ actorId: session.userId, action: "material.delete", entity: "MaterialType", entityId: id, before: { name: mat.name } });
+  revalidatePath("/materials");
+  return {};
+}
+
+/** Toggle whether a material can be sold (FINISHED goods are always sellable). */
+export async function setSellable(id: string, sellable: boolean) {
+  const session = await requireRole(["OPERATIONS_MANAGER"]);
+  await prisma.materialType.update({ where: { id }, data: { sellable } });
+  await audit({ actorId: session.userId, action: "material.sellable", entity: "MaterialType", entityId: id, after: { sellable } });
+  revalidatePath("/materials");
+  revalidatePath("/orders");
+  revalidatePath("/customers");
+}
+
 export async function createStage(
   _prev: FormState,
   formData: FormData,

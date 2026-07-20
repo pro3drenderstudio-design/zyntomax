@@ -38,16 +38,10 @@ export default async function IdCardPage({
           name: staff.user.name,
           staffNo: staff.staffNo,
           role,
+          title: staff.title,
           photoUrl: staff.photoUrl,
           hireDate: staff.hireDate,
           phone: staff.user.phone,
-          address: staff.address,
-          nextOfKin: staff.nextOfKinName
-            ? `${staff.nextOfKinName}${staff.nextOfKinPhone ? ` · ${staff.nextOfKinPhone}` : ""}`
-            : null,
-          bloodContact: staff.emergencyName
-            ? `${staff.emergencyName}${staff.emergencyPhone ? ` · ${staff.emergencyPhone}` : ""}`
-            : null,
         }}
       />
     </div>

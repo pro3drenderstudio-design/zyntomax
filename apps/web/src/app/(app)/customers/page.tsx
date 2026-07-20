@@ -20,7 +20,7 @@ export default async function CustomersPage() {
       orderBy: { name: "asc" },
     }),
     prisma.materialType.findMany({
-      where: { active: true, kind: "FINISHED" },
+      where: { active: true, OR: [{ kind: "FINISHED" }, { sellable: true }] },
       include: {
         priceLists: {
           where: { customerId: null },

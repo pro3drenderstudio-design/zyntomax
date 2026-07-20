@@ -4,13 +4,13 @@ export type IdCardData = {
   name: string;
   staffNo: string;
   role: string;
+  title?: string | null; // job title printed on the card
   photoUrl?: string | null;
   hireDate?: Date | null;
   phone?: string | null;
-  address?: string | null;
-  bloodContact?: string | null; // emergency contact line
-  nextOfKin?: string | null;
 };
+
+const OFFICIAL_PHONE = "08038830882";
 
 /**
  * Auto-generated staff ID card — front and back. The QR encodes the staff
@@ -48,7 +48,7 @@ export async function IdCard({ data }: { data: IdCardData }) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-base font-bold">{data.name}</p>
-            <p className="text-sm font-medium text-[#008037]">{data.role}</p>
+            <p className="text-sm font-medium text-[#008037]">{data.title || data.role}</p>
             <p className="mt-1 font-mono text-sm">{data.staffNo}</p>
             {data.hireDate && (
               <p className="text-[11px] text-slate-500">
@@ -69,15 +69,18 @@ export async function IdCard({ data }: { data: IdCardData }) {
         <div className="flex-1 p-4 text-[12px] leading-relaxed">
           <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#008037]">Cardholder details</p>
           <dl className="grid grid-cols-[90px_1fr] gap-x-2 gap-y-1">
+            <dt className="text-slate-500">Name</dt>
+            <dd className="font-medium">{data.name}</dd>
             <dt className="text-slate-500">Staff No.</dt>
             <dd className="font-mono">{data.staffNo}</dd>
-            {data.address && (<><dt className="text-slate-500">Address</dt><dd>{data.address}</dd></>)}
-            {data.nextOfKin && (<><dt className="text-slate-500">Next of kin</dt><dd>{data.nextOfKin}</dd></>)}
-            {data.bloodContact && (<><dt className="text-slate-500">Emergency</dt><dd>{data.bloodContact}</dd></>)}
+            {data.title && (<><dt className="text-slate-500">Title</dt><dd>{data.title}</dd></>)}
           </dl>
-          <p className="mt-3 text-[10px] text-slate-500">
-            If found, please return to Zyntomax Ventures Limited. This card remains company property
-            and must be surrendered on exit.
+          <p className="mt-3 text-[11px] text-slate-600">
+            If this card is found or lost, please call Zyntomax Ventures Limited on{" "}
+            <span className="font-semibold text-slate-800">{OFFICIAL_PHONE}</span>.
+          </p>
+          <p className="mt-1 text-[10px] text-slate-500">
+            This card remains company property and must be surrendered on exit.
           </p>
         </div>
         <div className="flex items-center gap-2 border-t border-slate-200 bg-slate-50 px-4 py-2">

@@ -79,28 +79,42 @@ export type SellableItem = {
   materialId: string;
   name: string;
   color: string | null;
+  kind: "RAW" | "INTERMEDIATE" | "FINISHED";
   siteId: string;
   availableKg: number;
 };
 
-/** FINISHED materials available to sell, per site, with quantity. */
+/** Home bucket location kind for a material of the given kind. */
+export function homeLocationKind(kind: string): "INTAKE" | "IN_PROCESSING" | "FINISHED_STORE" {
+  return kind === "FINISHED" ? "FINISHED_STORE" : kind === "INTERMEDIATE" ? "IN_PROCESSING" : "INTAKE";
+}
+
+/**
+ * Materials available to sell, per site, with quantity. FINISHED goods are
+ * always sellable; an intermediate/raw material can also be sold when flagged
+ * `sellable`. Stock is read from each material's home bucket.
+ */
 export async function sellableStock(siteIds: string[] | null): Promise<SellableItem[]> {
   const siteFilter = siteIds
     ? Prisma.sql`AND l."siteId" IN (${Prisma.join(siteIds)})`
     : Prisma.empty;
   const rows = await prisma.$queryRaw<
-    { id: string; name: string; color: string | null; siteId: string; bal: number }[]
+    { id: string; name: string; color: string | null; kind: string; siteId: string; bal: number }[]
   >(Prisma.sql`
-    SELECT m.id, m.name, m.color, l."siteId",
+    SELECT m.id, m.name, m.color, m.kind::text AS kind, l."siteId",
       SUM(CASE WHEN mv."toLocationId" = l.id THEN mv."weightKg" WHEN mv."fromLocationId" = l.id THEN -mv."weightKg" ELSE 0 END) AS bal
     FROM "InventoryMovement" mv
-    JOIN "MaterialType" m ON m.id = mv."materialTypeId" AND m.kind = 'FINISHED'
-    JOIN "InventoryLocation" l ON l.kind = 'FINISHED_STORE' AND (l.id = mv."toLocationId" OR l.id = mv."fromLocationId")
+    JOIN "MaterialType" m ON m.id = mv."materialTypeId" AND (m.kind = 'FINISHED' OR m.sellable = true)
+    JOIN "InventoryLocation" l ON (l.id = mv."toLocationId" OR l.id = mv."fromLocationId")
+      AND l.kind::text = (CASE m.kind WHEN 'FINISHED' THEN 'FINISHED_STORE' WHEN 'INTERMEDIATE' THEN 'IN_PROCESSING' ELSE 'INTAKE' END)
     WHERE TRUE ${siteFilter}
-    GROUP BY m.id, m.name, m.color, l."siteId"
+    GROUP BY m.id, m.name, m.color, m.kind, l."siteId"
     HAVING SUM(CASE WHEN mv."toLocationId" = l.id THEN mv."weightKg" WHEN mv."fromLocationId" = l.id THEN -mv."weightKg" ELSE 0 END) > 0.01
   `);
-  return rows.map((r) => ({ materialId: r.id, name: r.name, color: r.color, siteId: r.siteId, availableKg: Number(r.bal) }));
+  return rows.map((r) => ({
+    materialId: r.id, name: r.name, color: r.color,
+    kind: r.kind as SellableItem["kind"], siteId: r.siteId, availableKg: Number(r.bal),
+  }));
 }
 
 /** Balance of a material at a specific location. */

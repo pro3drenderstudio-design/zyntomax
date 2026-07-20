@@ -31,6 +31,7 @@ export default async function EditStaffPage({
         staff={{
           id: staff.id,
           name: staff.user.name,
+          title: staff.title,
           phone: staff.user.phone,
           email: staff.user.email,
           photoUrl: staff.photoUrl,

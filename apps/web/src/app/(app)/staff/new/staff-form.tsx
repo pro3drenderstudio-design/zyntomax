@@ -21,6 +21,7 @@ const ROLES = [
 export type StaffEditData = {
   id: string;
   name: string;
+  title: string | null;
   phone: string;
   email: string | null;
   photoUrl: string | null;
@@ -62,6 +63,10 @@ export function StaffForm({
         <div>
           <label htmlFor="st-name" className={labelClass}>Full name *</label>
           <input id="st-name" name="name" required defaultValue={staff?.name} className={inputClass} />
+        </div>
+        <div>
+          <label htmlFor="st-title" className={labelClass}>Title (shown on ID card)</label>
+          <input id="st-title" name="title" defaultValue={staff?.title ?? ""} placeholder="e.g. Sorting Operator" className={inputClass} />
         </div>
         <div>
           <label htmlFor="st-phone" className={labelClass}>Phone *</label>
