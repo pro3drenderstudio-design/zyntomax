@@ -66,16 +66,8 @@ export async function IdCard({ data }: { data: IdCardData }) {
       {/* BACK */}
       <div className="flex w-[340px] flex-col overflow-hidden rounded-xl border border-border bg-white text-slate-900 shadow-md print:shadow-none">
         <div className="h-1.5 bg-[#7ed957]" />
-        <div className="flex-1 p-4 text-[12px] leading-relaxed">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#008037]">Cardholder details</p>
-          <dl className="grid grid-cols-[90px_1fr] gap-x-2 gap-y-1">
-            <dt className="text-slate-500">Name</dt>
-            <dd className="font-medium">{data.name}</dd>
-            <dt className="text-slate-500">Staff No.</dt>
-            <dd className="font-mono">{data.staffNo}</dd>
-            {data.title && (<><dt className="text-slate-500">Title</dt><dd>{data.title}</dd></>)}
-          </dl>
-          <p className="mt-3 text-[11px] text-slate-600">
+        <div className="flex flex-1 flex-col justify-center p-4 text-[12px] leading-relaxed">
+          <p className="text-[11px] text-slate-600">
             If this card is found or lost, please call Zyntomax Ventures Limited on{" "}
             <span className="font-semibold text-slate-800">{OFFICIAL_PHONE}</span>.
           </p>
