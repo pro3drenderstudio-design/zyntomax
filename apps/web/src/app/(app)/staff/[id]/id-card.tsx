@@ -47,8 +47,8 @@ export async function IdCard({ data }: { data: IdCardData }) {
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-base font-bold">{data.name}</p>
-            <p className="text-sm font-medium text-[#008037]">{data.title || data.role}</p>
+            <p className="text-base font-bold leading-tight break-words">{data.name}</p>
+            <p className="text-sm font-medium leading-tight text-[#008037]">{data.title || data.role}</p>
             <p className="mt-1 font-mono text-sm">{data.staffNo}</p>
             {data.hireDate && (
               <p className="text-[11px] text-slate-500">
