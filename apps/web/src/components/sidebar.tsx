@@ -27,6 +27,7 @@ import {
   ClipboardList,
   Fuel,
   Navigation,
+  Landmark,
 } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: React.ReactNode };
@@ -96,9 +97,10 @@ const SECTIONS: NavSection[] = [
   },
   {
     title: "Finance",
-    roles: ["SUPER_ADMIN", "FINANCE_ADMIN", "AUDITOR"],
+    roles: ["SUPER_ADMIN", "FINANCE_ADMIN", "OPERATIONS_MANAGER", "AUDITOR"],
     items: [
       { href: "/expenses", label: "Expenses", icon: <Receipt size={16} /> },
+      { href: "/accounts", label: "Cash Accounts", icon: <Landmark size={16} /> },
       { href: "/wallet", label: "Wallet", icon: <Wallet size={16} /> },
       { href: "/diesel", label: "Diesel", icon: <Fuel size={16} /> },
       { href: "/budgets", label: "Budgets", icon: <Target size={16} /> },

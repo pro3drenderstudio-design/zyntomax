@@ -46,6 +46,7 @@ model Site {
   targets            Target[]
   settings           Setting[]
   dieselLogs         DieselLog[]
+  cashAccounts       CashAccount[]
 }
 
 enum UserStatus {
@@ -933,6 +934,9 @@ model SalesOrder {
   customerId  String
   orderNo     String           @unique
   status      SalesOrderStatus @default(DRAFT)
+  driverName  String?
+  truckNo     String?
+  waybillNo   String?
   createdById String?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
@@ -941,6 +945,7 @@ model SalesOrder {
   customer Customer         @relation(fields: [customerId], references: [id])
   items    SalesOrderItem[]
   invoice  Invoice?
+  expenses Expense[]
 
   @@index([siteId, status])
 }
@@ -1009,6 +1014,7 @@ model Expense {
   receiptUrl      String?
   purchaseBatchId String?
   tripId          String?
+  salesOrderId    String?
   incurredAt      DateTime @default(now())
   recordedById    String?
   createdAt       DateTime @default(now())
@@ -1017,6 +1023,8 @@ model Expense {
   category      ExpenseCategory @relation(fields: [categoryId], references: [id])
   purchaseBatch PurchaseBatch?  @relation(fields: [purchaseBatchId], references: [id])
   trip          Trip?           @relation(fields: [tripId], references: [id])
+  salesOrder    SalesOrder?     @relation(fields: [salesOrderId], references: [id])
+  cashTx        CashTransaction?
 
   @@index([siteId, incurredAt])
 }
@@ -1040,19 +1048,63 @@ model WalletTransaction {
 
 // Daily diesel consumption — reported against finished output (litres/kg)
 // to surface diesel theft or inefficiency over time.
+enum DieselLogKind {
+  PURCHASE
+  USAGE
+}
+
 model DieselLog {
-  id           String   @id @default(cuid())
+  id           String        @id @default(cuid())
   siteId       String
+  kind         DieselLogKind @default(PURCHASE)
   date         DateTime
-  litres       Decimal  @db.Decimal(10, 2)
-  cost         Decimal? @db.Decimal(14, 2)
-  note         String?
+  litres       Decimal       @db.Decimal(10, 2) // litres bought (PURCHASE) or consumed (USAGE)
+  cost         Decimal?      @db.Decimal(14, 2) // total cost of a purchase
+  note         String? // supplier / equipment / purpose
   recordedById String?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime      @default(now())
 
   site Site @relation(fields: [siteId], references: [id])
 
   @@index([siteId, date])
+}
+
+enum CashTxKind {
+  FUNDING // money moved into the account (float top-up)
+  EXPENSE // money spent by the manager (also recorded as an Expense)
+  ADJUSTMENT
+}
+
+/**
+ * A spendable cash/float account (e.g. "Factory expenses"). Funded from company
+ * money; the manager records spend against it. Balance = sum of transactions —
+ * never stored. Spend rows also create a categorised Expense so P&L stays correct.
+ */
+model CashAccount {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  siteId    String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  site         Site?             @relation(fields: [siteId], references: [id])
+  transactions CashTransaction[]
+}
+
+model CashTransaction {
+  id           String     @id @default(cuid())
+  accountId    String
+  kind         CashTxKind
+  amount       Decimal    @db.Decimal(14, 2) // + into the account (funding), - out (spend)
+  note         String?
+  expenseId    String?    @unique // set when a spend created a linked Expense
+  recordedById String?
+  createdAt    DateTime   @default(now())
+
+  account CashAccount @relation(fields: [accountId], references: [id])
+  expense Expense?    @relation(fields: [expenseId], references: [id])
+
+  @@index([accountId, createdAt])
 }
 
 model Budget {

@@ -23,8 +23,11 @@ export default async function DashboardPage() {
     walletAgg,
     pendingBatches,
     monthOutput,
-    outputTarget,
+    monthTargets,
     openInvoices,
+    monthCollected,
+    monthPurchased,
+    monthSales,
   ] = await Promise.all([
     prisma.vendor.count({ where: { ...siteWhere, status: "ACTIVE" } }),
     prisma.trip.findMany({
@@ -56,18 +59,25 @@ export default async function DashboardPage() {
         toLocation: { kind: "FINISHED_STORE", ...(siteIds ? { siteId: { in: siteIds } } : {}) },
       },
     }),
-    prisma.target.findFirst({
-      where: {
-        metric: "FINISHED_OUTPUT_KG",
-        periodYear: now.getFullYear(),
-        periodMonth: now.getMonth() + 1,
-        materialTypeId: null,
-        ...(siteIds ? { siteId: { in: [...siteIds, ] } } : { siteId: null }),
-      },
+    prisma.target.findMany({
+      where: { periodYear: now.getFullYear(), periodMonth: now.getMonth() + 1 },
+      include: { materialType: true },
     }),
     prisma.invoice.aggregate({
       _sum: { amount: true },
       where: { status: { in: ["UNPAID", "PARTIAL", "OVERDUE"] } },
+    }),
+    prisma.collectionWeighIn.aggregate({
+      _sum: { weightKg: true },
+      where: { createdAt: { gte: monthStart }, trip: siteWhere },
+    }),
+    prisma.purchaseBatchItem.aggregate({
+      _sum: { weightKg: true },
+      where: { batch: { scaledInAt: { gte: monthStart }, ...siteWhere } },
+    }),
+    prisma.invoice.aggregate({
+      _sum: { amount: true },
+      where: { createdAt: { gte: monthStart } },
     }),
   ]);
 
@@ -77,8 +87,18 @@ export default async function DashboardPage() {
   const finishedTotal = sumKg(buckets.finished);
 
   const walletBalance = Number(walletAgg._sum.amount ?? 0);
-  const outputKg = Number(monthOutput._sum.weightKg ?? 0);
-  const targetKg = outputTarget ? Number(outputTarget.value) : null;
+  const monthActual: Record<string, number> = {
+    FINISHED_OUTPUT_KG: Number(monthOutput._sum.weightKg ?? 0),
+    COLLECTION_KG: Number(monthCollected._sum.weightKg ?? 0),
+    PURCHASE_KG: Number(monthPurchased._sum.weightKg ?? 0),
+    SALES_NAIRA: Number(monthSales._sum.amount ?? 0),
+  };
+  const TARGET_LABEL: Record<string, string> = {
+    FINISHED_OUTPUT_KG: "Finished output",
+    COLLECTION_KG: "Collection",
+    PURCHASE_KG: "Purchases",
+    SALES_NAIRA: "Sales",
+  };
 
   return (
     <div>
@@ -104,34 +124,35 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {targetKg !== null && (
+      {monthTargets.length > 0 && (
         <Card className="mt-4">
-          <div className="mb-1 flex items-baseline justify-between">
-            <p className="text-sm font-medium">
-              Monthly output goal — {formatKg(targetKg)}
-            </p>
-            <p className="text-sm text-muted">
-              {outputKg >= targetKg
-                ? "Goal reached 🎯"
-                : `${formatKg(targetKg - outputKg)} remaining`}
-            </p>
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-medium">Monthly targets — {now.toLocaleDateString("en-NG", { month: "long" })}</p>
+            <Link href="/budgets" className="text-sm text-accent hover:underline">Edit targets</Link>
           </div>
-          <div
-            className="h-2.5 w-full overflow-hidden rounded-full bg-muted-bg"
-            role="progressbar"
-            aria-valuenow={Math.min(100, Math.round((outputKg / targetKg) * 100))}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div
-              className="h-full rounded-full bg-accent transition-all duration-300"
-              style={{ width: `${Math.min(100, (outputKg / targetKg) * 100)}%` }}
-            />
+          <div className="flex flex-col gap-3">
+            {monthTargets.map((t) => {
+              const target = Number(t.value);
+              const actual = monthActual[t.metric] ?? 0;
+              const pct = target > 0 ? (actual / target) * 100 : 0;
+              const naira = t.metric === "SALES_NAIRA";
+              const fmt = (n: number) => (naira ? formatNaira(n) : formatKg(n));
+              return (
+                <div key={t.id}>
+                  <div className="mb-1 flex items-baseline justify-between text-sm">
+                    <span className="font-medium">
+                      {TARGET_LABEL[t.metric] ?? t.metric}{t.materialType ? ` · ${t.materialType.name}` : ""} — {fmt(target)}
+                    </span>
+                    <span className="text-muted">{actual >= target ? "Reached 🎯" : `${fmt(target - actual)} to go`}</span>
+                  </div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted-bg" role="progressbar" aria-valuenow={Math.min(100, Math.round(pct))} aria-valuemin={0} aria-valuemax={100}>
+                    <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${Math.min(100, pct)}%` }} />
+                  </div>
+                  <p className="tabular mt-1 text-xs text-muted">{fmt(actual)} so far ({Math.round(pct)}%)</p>
+                </div>
+              );
+            })}
           </div>
-          <p className="tabular mt-1 text-xs text-muted">
-            {formatKg(outputKg)} produced this month (
-            {Math.round((outputKg / targetKg) * 100)}%)
-          </p>
         </Card>
       )}
 

@@ -15,6 +15,7 @@ const expenseSchema = z.object({
   description: z.string().optional(),
   purchaseBatchId: z.string().optional(),
   tripId: z.string().optional(),
+  salesOrderId: z.string().optional(),
   incurredAt: z.string().optional(),
 });
 
@@ -28,6 +29,7 @@ export async function createExpense(
     ...raw,
     purchaseBatchId: raw.purchaseBatchId || undefined,
     tripId: raw.tripId || undefined,
+    salesOrderId: raw.salesOrderId || undefined,
     incurredAt: raw.incurredAt || undefined,
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -41,6 +43,7 @@ export async function createExpense(
       description: data.description,
       purchaseBatchId: data.purchaseBatchId,
       tripId: data.tripId,
+      salesOrderId: data.salesOrderId,
       incurredAt: data.incurredAt ? new Date(data.incurredAt) : new Date(),
       recordedById: session.userId,
     },

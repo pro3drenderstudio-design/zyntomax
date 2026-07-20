@@ -22,13 +22,13 @@ function MaterialRow({ m, canEdit }: { m: Material; canEdit: boolean }) {
     <li className="inline-flex items-center gap-1.5 rounded-full bg-muted-bg py-1 pl-2.5 pr-1.5 text-sm">
       <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-border" style={{ backgroundColor: m.color ?? "#cbd5e1" }} aria-hidden />
       <span>{m.name}</span>
-      {sellable && <span title="Sellable" className="text-[11px] font-medium text-success">₦</span>}
+      {sellable && <span title="Sellable" className="text-[11px] font-medium text-accent">₦</span>}
       {canEdit && m.kind !== "FINISHED" && (
         <button
           type="button"
           disabled={pending}
           onClick={() => start(async () => { setError(null); await setSellable(m.id, !m.sellable); })}
-          className={`rounded px-1 text-[10px] font-medium ${m.sellable ? "text-success" : "text-muted hover:text-foreground"}`}
+          className={`rounded px-1 text-[10px] font-medium ${m.sellable ? "text-accent" : "text-muted hover:text-foreground"}`}
           title={m.sellable ? "Sellable — click to make non-sellable" : "Mark sellable"}
         >
           {m.sellable ? "sellable" : "sell?"}

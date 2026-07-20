@@ -11,11 +11,13 @@ export function ExpenseForm({
   categories,
   batches,
   trips,
+  sales,
 }: {
   sites: Option[];
   categories: Option[];
   batches: Option[];
   trips: Option[];
+  sales: Option[];
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     createExpense,
@@ -57,6 +59,13 @@ export function ExpenseForm({
         <select id="e-trip" name="tripId" className={inputClass} defaultValue="">
           <option value="">— None —</option>
           {trips.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      </div>
+      <div>
+        <label htmlFor="e-sale" className={labelClass}>Tie to sale</label>
+        <select id="e-sale" name="salesOrderId" className={inputClass} defaultValue="">
+          <option value="">— None —</option>
+          {sales.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </div>
       <div className="sm:col-span-2">

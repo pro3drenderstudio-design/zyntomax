@@ -33,6 +33,19 @@ export async function setBudget(
   return {};
 }
 
+export async function deleteBudget(id: string) {
+  await requireRole(["FINANCE_ADMIN"]);
+  await prisma.budget.delete({ where: { id } });
+  revalidatePath("/budgets");
+}
+
+export async function deleteTarget(id: string) {
+  await requireRole(["FINANCE_ADMIN", "OPERATIONS_MANAGER"]);
+  await prisma.target.delete({ where: { id } });
+  revalidatePath("/budgets");
+  revalidatePath("/");
+}
+
 export async function setTarget(
   _prev: FormState,
   formData: FormData,

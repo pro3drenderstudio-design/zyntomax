@@ -10,10 +10,10 @@ export default async function ExpensesPage() {
   const siteIds = accessibleSiteIds(session);
   const canEdit = hasRole(session, ["FINANCE_ADMIN", "OPERATIONS_MANAGER"]);
 
-  const [expenses, categories, sites, batches, trips] = await Promise.all([
+  const [expenses, categories, sites, batches, trips, sales] = await Promise.all([
     prisma.expense.findMany({
       where: siteIds ? { siteId: { in: siteIds } } : {},
-      include: { category: true, purchaseBatch: true, trip: { include: { locality: true } } },
+      include: { category: true, purchaseBatch: true, trip: { include: { locality: true } }, salesOrder: { include: { customer: true } } },
       orderBy: { incurredAt: "desc" },
       take: 100,
     }),
@@ -28,6 +28,12 @@ export default async function ExpensesPage() {
       orderBy: { date: "desc" },
       take: 30,
       include: { locality: true },
+    }),
+    prisma.salesOrder.findMany({
+      where: siteIds ? { siteId: { in: siteIds } } : {},
+      orderBy: { createdAt: "desc" },
+      take: 30,
+      include: { customer: true },
     }),
   ]);
 
@@ -55,6 +61,7 @@ export default async function ExpensesPage() {
               id: t.id,
               name: `${t.date.toLocaleDateString("en-NG")} — ${t.locality?.name ?? "Route"}`,
             }))}
+            sales={sales.map((s) => ({ id: s.id, name: `${s.orderNo} — ${s.customer.name}` }))}
           />
         </Card>
       )}
@@ -73,6 +80,10 @@ export default async function ExpensesPage() {
               ) : e.trip ? (
                 <Link href={`/trips/${e.tripId}`} className="text-accent hover:underline">
                   Trip {e.trip.date.toLocaleDateString("en-NG")}
+                </Link>
+              ) : e.salesOrder ? (
+                <Link href={`/orders/${e.salesOrderId}`} className="text-accent hover:underline">
+                  {e.salesOrder.orderNo} · {e.salesOrder.customer.name}
                 </Link>
               ) : (
                 "—"

@@ -13,7 +13,7 @@ export default async function PayrollPage() {
   const siteIds = accessibleSiteIds(session);
   const isFinance = hasRole(session, ["FINANCE_ADMIN", "HR_ADMIN"]);
 
-  const [runs, sites] = await Promise.all([
+  const [runs, sites, unpaidJobs, rateCards] = await Promise.all([
     prisma.payrollRun.findMany({
       where: siteIds ? { siteId: { in: siteIds } } : {},
       include: {
@@ -29,7 +29,17 @@ export default async function PayrollPage() {
     prisma.site.findMany({
       where: { active: true, ...(siteIds ? { id: { in: siteIds } } : {}) },
     }),
+    prisma.job.findMany({
+      where: { ...(siteIds ? { siteId: { in: siteIds } } : {}), status: { in: ["COMPLETED", "RESOLVED"] }, payrollRunId: null },
+      include: { stage: true, materialType: true },
+    }),
+    prisma.rateCard.findMany({ select: { stageId: true, materialTypeId: true } }),
   ]);
+
+  // Completed-but-unpaid jobs whose (stage, material) has no rate card → they pay ₦0.
+  const rated = new Set(rateCards.map((r) => `${r.stageId}:${r.materialTypeId}`));
+  const unrated = unpaidJobs.filter((j) => !rated.has(`${j.stageId}:${j.materialTypeId}`));
+  const unratedPairs = [...new Map(unrated.map((j) => [`${j.stageId}:${j.materialTypeId}`, `${j.stage.name} · ${j.materialType.name}`])).values()];
 
   const thisWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
   const sitesWithoutRun = sites.filter(
@@ -42,6 +52,18 @@ export default async function PayrollPage() {
         title="Payroll"
         subtitle="Weekly piece-rate wages: good output kg × rate per stage & material. Advances deduct automatically."
       />
+
+      {unrated.length > 0 && (
+        <Card className="mb-4 border-warning bg-warning-soft">
+          <p className="text-sm font-medium text-warning">
+            ⚠ {unrated.length} completed job{unrated.length > 1 ? "s" : ""} can&apos;t be paid — no rate card set for: {unratedPairs.join(", ")}.
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            Set a piece rate (₦/kg) for each stage &amp; material in{" "}
+            <Link href="/settings" className="text-accent hover:underline">Settings</Link>, then reopen or refresh payroll.
+          </p>
+        </Card>
+      )}
 
       {isFinance && (
         <Card className="mb-4">

@@ -1,7 +1,7 @@
 import { prisma } from "@zyntomax/db";
 import { requireSession, hasRole } from "@/lib/auth";
 import { PageHeader, Card, Table, formatNaira, formatKg } from "@/components/ui";
-import { BudgetForm, TargetForm } from "./budget-forms";
+import { BudgetForm, TargetForm, RowDelete } from "./budget-forms";
 import { startOfMonth, endOfMonth } from "date-fns";
 
 export default async function BudgetsPage() {
@@ -51,7 +51,7 @@ export default async function BudgetsPage() {
       )}
 
       <h2 className="mb-2 font-medium">Budget vs actual — this month</h2>
-      <Table headers={["Category", "Budget", "Actual", "Remaining", "Used"]}>
+      <Table headers={["Category", "Budget", "Actual", "Remaining", "Used", canEdit ? "" : ""]}>
         {budgets.map((b) => {
           const actual = actualByCategory.get(b.categoryId) ?? 0;
           const remaining = Number(b.amount) - actual;
@@ -75,16 +75,17 @@ export default async function BudgetsPage() {
                   <span className="tabular text-xs text-muted">{pct.toFixed(0)}%</span>
                 </div>
               </td>
+              {canEdit && <td className="px-3 py-2 text-right"><RowDelete id={b.id} kind="budget" /></td>}
             </tr>
           );
         })}
         {budgets.length === 0 && (
-          <tr><td colSpan={5} className="px-3 py-6 text-center text-sm text-muted">No budgets set for this month.</td></tr>
+          <tr><td colSpan={6} className="px-3 py-6 text-center text-sm text-muted">No budgets set for this month.</td></tr>
         )}
       </Table>
 
       <h2 className="mb-2 mt-6 font-medium">Targets — this month</h2>
-      <Table headers={["Metric", "Scope", "Target"]}>
+      <Table headers={["Metric", "Scope", "Target", canEdit ? "" : ""]}>
         {targets.map((t) => (
           <tr key={t.id}>
             <td className="px-3 py-2 font-medium">{t.metric.replace(/_/g, " ")}</td>
@@ -92,10 +93,11 @@ export default async function BudgetsPage() {
             <td className="tabular px-3 py-2">
               {t.metric === "SALES_NAIRA" ? formatNaira(Number(t.value)) : formatKg(Number(t.value))}
             </td>
+            {canEdit && <td className="px-3 py-2 text-right"><RowDelete id={t.id} kind="target" /></td>}
           </tr>
         ))}
         {targets.length === 0 && (
-          <tr><td colSpan={3} className="px-3 py-6 text-center text-sm text-muted">No targets set for this month.</td></tr>
+          <tr><td colSpan={4} className="px-3 py-6 text-center text-sm text-muted">No targets set for this month.</td></tr>
         )}
       </Table>
     </div>

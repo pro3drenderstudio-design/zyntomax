@@ -9,6 +9,20 @@ import { sellableStock, homeLocationKind } from "@/lib/inventory";
 
 export type FormState = { error?: string };
 
+/** Set delivery details (driver, truck, waybill no.) on a sale — used by the invoice/waybill. */
+export async function setDelivery(_prev: FormState, formData: FormData): Promise<FormState> {
+  const session = await requireRole(["SALES_ADMIN", "OPERATIONS_MANAGER", "FINANCE_ADMIN"]);
+  const id = String(formData.get("orderId") ?? "");
+  if (!id) return { error: "Missing order." };
+  const driverName = String(formData.get("driverName") ?? "").trim() || null;
+  const truckNo = String(formData.get("truckNo") ?? "").trim() || null;
+  const waybillNo = String(formData.get("waybillNo") ?? "").trim() || null;
+  await prisma.salesOrder.update({ where: { id }, data: { driverName, truckNo, waybillNo } });
+  await audit({ actorId: session.userId, action: "sale.delivery", entity: "SalesOrder", entityId: id, after: { driverName, truckNo, waybillNo } });
+  revalidatePath(`/orders/${id}`);
+  return {};
+}
+
 async function nextNumber(prefix: string, count: number): Promise<string> {
   const ymd = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   return `${prefix}-${ymd}-${String(count + 1).padStart(3, "0")}`;

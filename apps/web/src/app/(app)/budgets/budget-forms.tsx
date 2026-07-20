@@ -1,10 +1,26 @@
 "use client";
 
-import { useActionState } from "react";
-import { setBudget, setTarget, type FormState } from "./actions";
+import { useActionState, useTransition } from "react";
+import { setBudget, setTarget, deleteBudget, deleteTarget, type FormState } from "./actions";
 import { inputClass, labelClass, buttonClass } from "@/components/ui";
 
 const currentPeriod = () => new Date().toISOString().slice(0, 7);
+
+export function RowDelete({ id, kind }: { id: string; kind: "budget" | "target" }) {
+  const [pending, start] = useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => { if (confirm("Delete this?")) start(() => (kind === "budget" ? deleteBudget(id) : deleteTarget(id))); }}
+      className="rounded-full px-1.5 leading-none text-muted hover:bg-destructive-soft hover:text-destructive disabled:opacity-50"
+      title="Delete"
+      aria-label="Delete"
+    >
+      ×
+    </button>
+  );
+}
 
 export function BudgetForm({ categories }: { categories: { id: string; name: string }[] }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(setBudget, {});

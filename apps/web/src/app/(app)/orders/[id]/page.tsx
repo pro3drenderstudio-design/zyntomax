@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { prisma } from "@zyntomax/db";
 import { requireSession, hasRole } from "@/lib/auth";
 import {
   PageHeader, Card, Table, Badge, statusTone, StatCard, formatKg, formatNaira,
 } from "@/components/ui";
 import { InvoicePaymentForm } from "../../invoices/payment-form";
+import { DeliveryForm } from "./delivery-form";
 
 export default async function SaleDetailPage({
   params,
@@ -29,6 +31,7 @@ export default async function SaleDetailPage({
   const paid = inv?.payments.reduce((s, p) => s + Number(p.amount), 0) ?? 0;
   const open = inv ? Number(inv.amount) - paid : 0;
   const canRecord = hasRole(session, ["FINANCE_ADMIN", "SALES_ADMIN"]);
+  const canEditDelivery = hasRole(session, ["FINANCE_ADMIN", "SALES_ADMIN", "OPERATIONS_MANAGER"]);
 
   return (
     <div>
@@ -76,6 +79,23 @@ export default async function SaleDetailPage({
           </div>
         </Card>
       )}
+
+      <Card className="mt-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-medium">Delivery & documents</h2>
+          <div className="flex gap-2">
+            <Link href={`/orders/${order.id}/invoice`} className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted-bg">Invoice PDF</Link>
+            <Link href={`/orders/${order.id}/waybill`} className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted-bg">Waybill</Link>
+          </div>
+        </div>
+        {canEditDelivery ? (
+          <DeliveryForm orderId={order.id} driverName={order.driverName} truckNo={order.truckNo} waybillNo={order.waybillNo} />
+        ) : (
+          <p className="text-sm text-muted">
+            Driver: {order.driverName ?? "—"} · Truck: {order.truckNo ?? "—"} · Waybill: {order.waybillNo ?? "—"}
+          </p>
+        )}
+      </Card>
     </div>
   );
 }
