@@ -58,6 +58,7 @@ const SECTIONS: NavSection[] = [
       { href: "/trips", label: "Trips", icon: <Truck size={16} /> },
       { href: "/agents", label: "Live Tracking", icon: <Navigation size={16} /> },
       { href: "/payouts", label: "Payouts", icon: <Banknote size={16} /> },
+      { href: "/withdrawals", label: "Withdrawals", icon: <HandCoins size={16} /> },
     ],
   },
   {

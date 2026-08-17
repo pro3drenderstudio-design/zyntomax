@@ -18,7 +18,7 @@ const VENDOR_KEY = "zyntomax.vendor.profile";
 export type VendorProfile = { id: string; name: string; vendorNo: string | null; phone: string };
 
 export type VendorHome = {
-  vendor: { id: string; name: string; nickname: string | null; vendorNo: string | null; phone: string; locality: string | null; bankVerified: boolean; bankName: string | null };
+  vendor: { id: string; name: string; nickname: string | null; vendorNo: string | null; phone: string; locality: string | null; address: string | null; photoUrl: string | null; bankVerified: boolean; bankName: string | null };
   lifetimeKg: number;
   lifetimeNaira: number;
   rewards: {
@@ -107,4 +107,39 @@ export async function requestPickup(input: {
   photoUrl: string; estWeightKg?: number; note?: string; lat?: number; lng?: number;
 }): Promise<void> {
   await auth("/api/vendor/pickups", { method: "POST", json: input });
+}
+
+export type Withdrawal = {
+  id: string; amount: number; status: string; requestedAt: string;
+  processedAt: string | null; bankName: string | null; last4: string | null; failureReason: string | null;
+};
+export type WalletData = {
+  earned: number; paidOut: number; withdrawn: number; available: number; minWithdrawal: number;
+  bank: { verified: boolean; bankName: string | null; accountName: string | null; last4: string | null };
+  withdrawals: Withdrawal[];
+};
+export async function getWallet(): Promise<WalletData> { return auth<WalletData>("/api/vendor/wallet"); }
+export async function requestWithdrawal(amount: number): Promise<void> {
+  await auth("/api/vendor/withdrawals", { method: "POST", json: { amount } });
+}
+
+export type Bank = { name: string; code: string };
+export async function getBanks(): Promise<Bank[]> {
+  const b = await auth<{ banks: Bank[] }>("/api/vendor/bank");
+  return b.banks;
+}
+export async function verifyBank(bankCode: string, bankName: string, accountNo: string): Promise<{ accountName: string; last4: string }> {
+  return auth("/api/vendor/bank", { method: "POST", json: { bankCode, bankName, accountNo } });
+}
+export async function updateProfile(input: { name?: string; nickname?: string; address?: string; photoUrl?: string }): Promise<void> {
+  await auth("/api/vendor/profile", { method: "PATCH", json: input });
+}
+
+export type PickupTrack = {
+  status: string;
+  vendor: { lat: number; lng: number } | null;
+  collector: { name: string; lat: number; lng: number; recordedAt: string } | null;
+};
+export async function trackPickup(id: string): Promise<PickupTrack> {
+  return auth<PickupTrack>(`/api/vendor/pickups/${id}/track`);
 }

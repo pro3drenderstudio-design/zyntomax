@@ -1,9 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { View, Image } from "react-native";
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getPickups, type VendorPickup } from "../../lib/api";
+import { getPickups, trackPickup, type VendorPickup, type PickupTrack } from "../../lib/api";
 import { Screen, Card, Txt, Row, Badge, Loading, EmptyState } from "../../lib/ui";
+import { MiniMap } from "../../lib/map";
 import { colors, space, radius } from "../../lib/theme";
 import { kg, shortDate, relativeDate } from "../../lib/format";
 
@@ -17,12 +18,23 @@ const ORDER = ["PENDING", "SCHEDULED", "COLLECTED"];
 export default function PickupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [pickup, setPickup] = useState<VendorPickup | null | undefined>(undefined);
+  const [track, setTrack] = useState<PickupTrack | null>(null);
 
   const load = useCallback(async () => {
     try { const all = await getPickups(); setPickup(all.find((p) => p.id === id) ?? null); }
     catch { setPickup(null); }
   }, [id]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Poll live location every 15s while the pickup is scheduled.
+  useEffect(() => {
+    if (pickup?.status !== "SCHEDULED") return;
+    let cancelled = false;
+    const tick = async () => { try { const t = await trackPickup(id); if (!cancelled) setTrack(t); } catch { /* ignore */ } };
+    tick();
+    const iv = setInterval(tick, 15000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [id, pickup?.status]);
 
   if (pickup === undefined) return <Loading />;
   if (!pickup) return <Screen><Card><EmptyState icon={<Ionicons name="alert-circle-outline" size={32} color={colors.mutedLight} />} title="Pickup not found" /></Card></Screen>;
@@ -86,7 +98,21 @@ export default function PickupDetailScreen() {
             </View>
             <Ionicons name="car" size={22} color={colors.accent} />
           </Row>
-          <Txt variant="tiny" color={colors.mutedLight} style={{ marginTop: space.sm }}>Live collector location is coming in the next update.</Txt>
+          {track?.collector ? (
+            <View style={{ marginTop: space.md, gap: 6 }}>
+              <MiniMap
+                points={[
+                  { lat: track.collector.lat, lng: track.collector.lng, label: "Collector", color: colors.accent },
+                  ...(track.vendor ? [{ lat: track.vendor.lat, lng: track.vendor.lng, label: "You", color: colors.info }] : []),
+                ]}
+              />
+              <Txt variant="tiny" color={colors.mutedLight}>Collector location updates every few seconds while en route.</Txt>
+            </View>
+          ) : (
+            <Txt variant="tiny" color={colors.mutedLight} style={{ marginTop: space.sm }}>
+              {pickup.status === "SCHEDULED" ? "Waiting for your collector to start sharing location…" : "Live location shows once your pickup is scheduled."}
+            </Txt>
+          )}
         </Card>
       )}
     </Screen>

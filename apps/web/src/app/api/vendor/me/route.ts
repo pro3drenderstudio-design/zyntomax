@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
     vendor: {
       id: vendor.id, name: vendor.name, nickname: vendor.nickname, vendorNo: vendor.vendorNo,
       phone: vendor.phone, locality: vendor.locality?.name ?? null,
+      address: vendor.address, photoUrl: vendor.photoUrl,
       bankVerified: vendor.bankVerified, bankName: vendor.bankName,
     },
     lifetimeKg, lifetimeNaira,

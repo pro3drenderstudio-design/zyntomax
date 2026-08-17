@@ -269,6 +269,7 @@ model Vendor {
   pickupRequests PickupRequest[]
   weighIns       CollectionWeighIn[]
   payouts        Payout[]
+  withdrawals    Withdrawal[]
   rewardGrants   RewardGrant[]
   notifications  Notification[]
 
@@ -308,6 +309,41 @@ enum PickupStatus {
   SCHEDULED
   COLLECTED
   CANCELLED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+  FAILED
+}
+
+/**
+ * Vendor-initiated cash-out from their wallet. Wallet balance is computed:
+ * Σ(weigh-in amounts) − Σ(released trip payouts) − Σ(active withdrawals).
+ * A withdrawal debits that balance; admin approves → Paystack transfer.
+ */
+model Withdrawal {
+  id             String           @id @default(cuid())
+  vendorId       String
+  amount         Decimal          @db.Decimal(14, 2)
+  status         WithdrawalStatus @default(PENDING)
+  method         String           @default("TRANSFER")
+  bankName       String?
+  accountLast4   String?
+  paystackRef    String?
+  idempotencyKey String           @unique
+  failureReason  String?
+  note           String?
+  requestedAt    DateTime         @default(now())
+  processedById  String?
+  processedAt    DateTime?
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+
+  @@index([vendorId, status])
+  @@index([status])
 }
 
 model PickupRequest {

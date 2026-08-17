@@ -20,6 +20,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="pickup/new" options={{ title: "Request a pickup", presentation: "modal" }} />
         <Stack.Screen name="pickup/[id]" options={{ title: "Pickup" }} />
+        <Stack.Screen name="withdraw" options={{ title: "Withdraw", presentation: "modal" }} />
         <Stack.Screen name="history" options={{ title: "Sales history" }} />
         <Stack.Screen name="help" options={{ title: "Help & support" }} />
         <Stack.Screen name="account/edit" options={{ title: "Edit profile" }} />
