@@ -30,7 +30,7 @@ export async function requireRole(
   siteId?: string,
 ): Promise<Session> {
   const session = await requireSession();
-  if (!hasRole(session, roles, siteId)) redirect("/");
+  if (!hasRole(session, roles, siteId)) redirect("/dashboard");
   return session;
 }
 

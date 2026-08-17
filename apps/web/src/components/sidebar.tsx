@@ -38,7 +38,7 @@ const SECTIONS: NavSection[] = [
     title: "",
     roles: ["*"],
     items: [
-      { href: "/", label: "Dashboard", icon: <LayoutDashboard size={16} /> },
+      { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} /> },
     ],
   },
   {

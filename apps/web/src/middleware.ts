@@ -8,7 +8,7 @@ const PUBLIC_PATHS = ["/login", "/download", "/api/webhooks", "/api/mobile", "/a
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  if (pathname === "/" || PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 

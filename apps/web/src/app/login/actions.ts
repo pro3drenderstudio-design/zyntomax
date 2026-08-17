@@ -43,5 +43,5 @@ export async function login(
     roles: user.roles.map((r) => ({ role: r.role, siteId: r.siteId })),
   });
 
-  redirect("/");
+  redirect("/dashboard");
 }
