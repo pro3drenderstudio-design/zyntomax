@@ -82,6 +82,10 @@ export default function ProfileScreen() {
           <Divider />
           <SettingRow icon="stats-chart-outline" label="Sales history" onPress={() => router.push("/history")} />
           <Divider />
+          <SettingRow icon="pricetags-outline" label="Today's rates" onPress={() => router.push("/rates")} />
+          <Divider />
+          <SettingRow icon="gift-outline" label="Invite & earn" onPress={() => router.push("/referral")} />
+          <Divider />
           <SettingRow icon="settings-outline" label="Settings & language" onPress={() => router.push("/account/settings")} />
         </Card>
       </View>

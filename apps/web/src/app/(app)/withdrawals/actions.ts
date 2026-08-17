@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { initiateTransfer, isSimulated } from "@/lib/paystack";
 import { sendSms } from "@/lib/sms";
+import { sendExpoPush } from "@/lib/push";
 
 async function companyWalletBalance(): Promise<number> {
   const agg = await prisma.walletTransaction.aggregate({ _sum: { amount: true } });
@@ -46,6 +47,7 @@ export async function approveWithdrawal(id: string): Promise<void> {
       }),
     ]);
     await sendSms({ to: w.vendor.phone, vendorId: w.vendorId, body: `Zyntomax: your withdrawal of ₦${Number(w.amount).toLocaleString("en-NG")} has been paid to your bank. Thank you!` });
+    await sendExpoPush(w.vendor.pushToken, "Payment sent 💸", `Your withdrawal of ₦${Number(w.amount).toLocaleString("en-NG")} has been paid to your bank.`, { screen: "wallet" });
     await audit({ actorId: session.userId, action: "withdrawal.approve", entity: "Withdrawal", entityId: id, after: { amount: Number(w.amount) } });
   } catch (e) {
     await prisma.withdrawal.update({ where: { id }, data: { status: "FAILED", failureReason: e instanceof Error ? e.message : "Transfer failed", processedById: session.userId, processedAt: new Date() } });

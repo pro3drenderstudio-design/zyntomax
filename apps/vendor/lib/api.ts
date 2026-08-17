@@ -135,6 +135,20 @@ export async function updateProfile(input: { name?: string; nickname?: string; a
   await auth("/api/vendor/profile", { method: "PATCH", json: input });
 }
 
+export type RateItem = { material: string; color: string | null; pricePerKg: number };
+export async function getRates(): Promise<RateItem[]> {
+  const b = await auth<{ rates: RateItem[] }>("/api/vendor/rates");
+  return b.rates;
+}
+
+export async function getReferral(): Promise<{ code: string | null; referredCount: number }> {
+  return auth("/api/vendor/referral");
+}
+
+export async function registerPushToken(token: string): Promise<void> {
+  try { await auth("/api/vendor/push-token", { method: "POST", json: { token } }); } catch { /* best-effort */ }
+}
+
 export type PickupTrack = {
   status: string;
   vendor: { lat: number; lng: number } | null;

@@ -259,6 +259,9 @@ model Vendor {
   bankVerified    Boolean      @default(false)
   bvnEncrypted    String?
   paystackRecipient String?
+  pushToken       String? // Expo push token for notifications
+  referralCode    String?      @unique
+  referredByCode  String? // referral code of the vendor who invited them
   status          VendorStatus @default(ACTIVE)
   registeredById  String?
   createdAt       DateTime     @default(now())

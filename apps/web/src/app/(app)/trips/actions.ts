@@ -10,6 +10,7 @@ import { audit } from "@/lib/audit";
 import { getSetting } from "@/lib/settings";
 import { siteLocation } from "@/lib/inventory";
 import { recordWeighIn } from "@/lib/collection";
+import { sendExpoPush } from "@/lib/push";
 import { approveTripById } from "@/lib/trips";
 
 export type FormState = { error?: string };
@@ -51,13 +52,17 @@ export async function createTrip(
 
   // Attach pending pickup requests from the trip's locality
   if (parsed.data.localityId) {
+    const scheduling = await prisma.pickupRequest.findMany({
+      where: { status: "PENDING", vendor: { localityId: parsed.data.localityId } },
+      include: { vendor: true },
+    });
     await prisma.pickupRequest.updateMany({
-      where: {
-        status: "PENDING",
-        vendor: { localityId: parsed.data.localityId },
-      },
+      where: { status: "PENDING", vendor: { localityId: parsed.data.localityId } },
       data: { status: "SCHEDULED", tripId: trip.id },
     });
+    for (const p of scheduling) {
+      await sendExpoPush(p.vendor.pushToken, "Pickup scheduled 🚛", "A collector is on the way for your recyclables. Track them in the app.", { pickupId: p.id });
+    }
   }
 
   await audit({
