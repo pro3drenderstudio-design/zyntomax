@@ -2,6 +2,7 @@
   "expo": {
     "name": "Zyntomax Vendor",
     "slug": "zyntomax-vendor",
+    "owner": "mizark",
     "version": "0.1.0",
     "scheme": "zyntomax-vendor",
     "orientation": "portrait",
@@ -14,7 +15,15 @@
       "package": "com.zyntomax.vendor",
       "adaptiveIcon": {
         "backgroundColor": "#008037"
-      }
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.zyntomax.vendor"
@@ -23,13 +32,37 @@
       "expo-router",
       "expo-secure-store",
       "expo-localization",
-      ["expo-camera", { "cameraPermission": "Zyntomax uses your camera so you can photograph your recyclables when requesting a pickup." }],
-      ["expo-image-picker", { "photosPermission": "Zyntomax accesses your photos so you can attach pictures of recyclables or a profile photo." }],
-      ["expo-location", { "locationWhenInUsePermission": "Zyntomax uses your location to find you for pickups and to show your collector's live position." }],
-      ["expo-local-authentication", { "faceIDPermission": "Zyntomax uses Face ID / fingerprint to lock the app." }]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Zyntomax uses your camera so you can photograph your recyclables when requesting a pickup."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Zyntomax accesses your photos so you can attach pictures of recyclables or a profile photo."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Zyntomax uses your location to find you for pickups and to show your collector's live position."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Zyntomax uses Face ID / fingerprint to lock the app."
+        }
+      ]
     ],
     "extra": {
-      "apiUrl": "https://www.zyntomax.com"
+      "apiUrl": "https://www.zyntomax.com",
+      "router": {},
+      "eas": {
+        "projectId": "2e628cbd-e3a6-461c-9619-7d48890ac07a"
+      }
     }
   }
 }
