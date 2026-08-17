@@ -40,7 +40,7 @@ export default function PickupsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{p.vendor.name}</Text>
               <Text style={styles.meta}>
-                {p.vendor.locality ?? "—"} · ~{p.estWeightKg} kg
+                {p.vendor.locality ?? "—"}{p.estWeightKg ? ` · ~${p.estWeightKg} kg` : ""}
               </Text>
               {p.vendor.address ? <Text style={styles.meta}>{p.vendor.address}</Text> : null}
             </View>

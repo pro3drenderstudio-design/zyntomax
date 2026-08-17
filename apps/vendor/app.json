@@ -7,13 +7,29 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "splash": { "backgroundColor": "#008037" },
+    "splash": {
+      "backgroundColor": "#008037"
+    },
     "android": {
       "package": "com.zyntomax.vendor",
-      "adaptiveIcon": { "backgroundColor": "#008037" }
+      "adaptiveIcon": {
+        "backgroundColor": "#008037"
+      }
     },
-    "ios": { "bundleIdentifier": "com.zyntomax.vendor" },
-    "plugins": ["expo-router"],
-    "extra": { "apiUrl": "https://www.zyntomax.com" }
+    "ios": {
+      "bundleIdentifier": "com.zyntomax.vendor"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-localization",
+      ["expo-camera", { "cameraPermission": "Zyntomax uses your camera so you can photograph your recyclables when requesting a pickup." }],
+      ["expo-image-picker", { "photosPermission": "Zyntomax accesses your photos so you can attach pictures of recyclables or a profile photo." }],
+      ["expo-location", { "locationWhenInUsePermission": "Zyntomax uses your location to find you for pickups and to show your collector's live position." }],
+      ["expo-local-authentication", { "faceIDPermission": "Zyntomax uses Face ID / fingerprint to lock the app." }]
+    ],
+    "extra": {
+      "apiUrl": "https://www.zyntomax.com"
+    }
   }
 }

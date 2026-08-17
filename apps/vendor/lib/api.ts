@@ -29,7 +29,15 @@ export type VendorHome = {
   payments: { id: string; date: string; amount: number; status: string; reference: string | null }[];
 };
 
-export type VendorPickup = { id: string; estWeightKg: number; status: string; createdAt: string };
+export type VendorPickup = {
+  id: string;
+  estWeightKg: number | null;
+  photoUrl: string | null;
+  note: string | null;
+  status: string;
+  createdAt: string;
+  trip: { id: string; date: string; status: string; vehicle: string | null; collector: string | null } | null;
+};
 
 export async function getToken() { return AsyncStorage.getItem(TOKEN_KEY); }
 export async function getStoredVendor(): Promise<VendorProfile | null> {
@@ -77,6 +85,26 @@ export async function getPickups(): Promise<VendorPickup[]> {
   const b = await auth<{ pickups: VendorPickup[] }>("/api/vendor/pickups");
   return b.pickups;
 }
-export async function requestPickup(estWeightKg: number): Promise<void> {
-  await auth("/api/vendor/pickups", { method: "POST", json: { estWeightKg } });
+
+/** Upload a local image file (from camera/gallery) and return its public URL. */
+export async function uploadPhoto(uri: string): Promise<string> {
+  const token = await getToken();
+  const form = new FormData();
+  const name = uri.split("/").pop() || `photo-${Date.now()}.jpg`;
+  // React Native's fetch accepts a {uri,name,type} file object in FormData.
+  form.append("file", { uri, name, type: "image/jpeg" } as unknown as Blob);
+  const res = await fetch(`${API_URL}/api/vendor/upload`, {
+    method: "POST",
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: form,
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error ?? "Upload failed");
+  return body.url as string;
+}
+
+export async function requestPickup(input: {
+  photoUrl: string; estWeightKg?: number; note?: string; lat?: number; lng?: number;
+}): Promise<void> {
+  await auth("/api/vendor/pickups", { method: "POST", json: input });
 }

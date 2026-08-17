@@ -48,7 +48,7 @@ export type TripSummary = {
 
 export type Pickup = {
   id: string;
-  estWeightKg: number;
+  estWeightKg: number | null;
   status: string;
   createdAt: string;
   vendor: {

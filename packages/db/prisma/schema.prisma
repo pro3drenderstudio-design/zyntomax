@@ -313,7 +313,11 @@ enum PickupStatus {
 model PickupRequest {
   id          String       @id @default(cuid())
   vendorId    String
-  estWeightKg Decimal      @db.Decimal(10, 2)
+  estWeightKg Decimal?     @db.Decimal(10, 2) // optional — vendors may not know the weight
+  photoUrl    String? // photo proof of the recyclables
+  note        String?
+  lat         Float?
+  lng         Float?
   source      PickupSource @default(AGENT)
   status      PickupStatus @default(PENDING)
   tripId      String?

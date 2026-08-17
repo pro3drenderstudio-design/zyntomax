@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     pickups: requests.map((r) => ({
       id: r.id,
-      estWeightKg: Number(r.estWeightKg),
+      estWeightKg: r.estWeightKg === null ? null : Number(r.estWeightKg),
       status: r.status,
       createdAt: r.createdAt,
       vendor: {
