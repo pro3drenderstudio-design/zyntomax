@@ -5,7 +5,8 @@ export const metadata: Metadata = {
   description: "Recycle. Earn. Get paid. Request pickups, track collectors, and withdraw to your bank — all from your phone.",
 };
 
-const APK_URL = process.env.VENDOR_APK_URL || "";
+export const dynamic = "force-dynamic";
+
 const SUPPORT_PHONE = "08038830882";
 
 const FEATURES = [
@@ -25,6 +26,7 @@ const STEPS = [
 ];
 
 export default function DownloadPage() {
+  const APK_URL = process.env.VENDOR_APK_URL || "";
   return (
     <main style={{ background: "#0b3d24", minHeight: "100vh", color: "#fff", fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
       {/* Hero */}
