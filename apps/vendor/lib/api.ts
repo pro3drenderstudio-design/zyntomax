@@ -69,6 +69,25 @@ async function auth<T>(path: string, init?: { method?: string; json?: unknown })
   return body as T;
 }
 
+export async function registerVendor(input: {
+  name: string; phone: string; photoUri?: string; address?: string; lat?: number; lng?: number; referredByCode?: string;
+}): Promise<void> {
+  const form = new FormData();
+  form.append("name", input.name);
+  form.append("phone", input.phone);
+  if (input.address) form.append("address", input.address);
+  if (input.lat != null) form.append("lat", String(input.lat));
+  if (input.lng != null) form.append("lng", String(input.lng));
+  if (input.referredByCode) form.append("referredByCode", input.referredByCode);
+  if (input.photoUri) {
+    const nm = input.photoUri.split("/").pop() || `photo-${Date.now()}.jpg`;
+    form.append("photo", { uri: input.photoUri, name: nm, type: "image/jpeg" } as unknown as Blob);
+  }
+  const res = await fetch(`${API_URL}/api/vendor/register`, { method: "POST", body: form });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error ?? "Registration failed");
+}
+
 export async function requestOtp(phone: string): Promise<{ devCode?: string }> {
   return post<{ ok: boolean; devCode?: string }>("/api/vendor/otp/request", { phone });
 }

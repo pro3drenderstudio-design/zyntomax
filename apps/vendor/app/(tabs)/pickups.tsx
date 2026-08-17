@@ -6,6 +6,7 @@ import { getPickups, type VendorPickup } from "../../lib/api";
 import { Screen, Card, Txt, Row, Badge, Button, EmptyState, Loading } from "../../lib/ui";
 import { colors, space, radius } from "../../lib/theme";
 import { kg, relativeDate } from "../../lib/format";
+import { useI18n } from "../../lib/i18n";
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: "Awaiting pickup",
@@ -16,6 +17,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function PickupsScreen() {
   const router = useRouter();
+  const { t } = useI18n();
   const [pickups, setPickups] = useState<VendorPickup[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -31,14 +33,14 @@ export default function PickupsScreen() {
   return (
     <Screen refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }}>
       <Button
-        title={hasOpen ? "You have an open request" : "Request a pickup"}
+        title={hasOpen ? t("open_request") : t("request_pickup")}
         icon={<Ionicons name="camera" size={18} color="#fff" />}
         onPress={() => router.push("/pickup/new")}
         disabled={hasOpen}
       />
 
       {pickups.length === 0 ? (
-        <Card><EmptyState icon={<Ionicons name="cube-outline" size={32} color={colors.mutedLight} />} title="No pickup requests yet" subtitle="Tap “Request a pickup”, snap a photo of your recyclables, and we’ll schedule a collection." /></Card>
+        <Card><EmptyState icon={<Ionicons name="cube-outline" size={32} color={colors.mutedLight} />} title={t("no_pickups")} subtitle="Tap “Request a pickup”, snap a photo of your recyclables, and we’ll schedule a collection." /></Card>
       ) : (
         pickups.map((p) => (
           <Card key={p.id} onPress={() => router.push(`/pickup/${p.id}`)}>

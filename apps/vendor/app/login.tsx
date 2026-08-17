@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, Image, StyleSheet, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { View, Text, Image, StyleSheet, KeyboardAvoidingView, Platform, Alert, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { requestOtp, verifyOtp } from "../lib/api";
 import { Field, Button, Label, ErrorText, Card } from "../lib/ui";
@@ -52,7 +52,10 @@ export default function LoginScreen() {
             <ErrorText>{error}</ErrorText>
             {error ? <View style={{ height: 8 }} /> : null}
             <Button title={busy ? "Sending…" : "Send code"} onPress={sendCode} disabled={busy} />
-            <Text style={styles.hint}>We&apos;ll text you a 6-digit code. Only numbers registered with a collector can sign in.</Text>
+            <Text style={styles.hint}>We&apos;ll text you a 6-digit code to sign in.</Text>
+            <Pressable onPress={() => router.push("/register")} style={{ marginTop: 14, alignItems: "center" }}>
+              <Text style={{ fontSize: 14, color: colors.muted }}>New to Zyntomax? <Text style={{ color: colors.accent, fontWeight: "700" }}>Create an account</Text></Text>
+            </Pressable>
           </>
         ) : (
           <>

@@ -8,6 +8,33 @@ import { requireRole } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { createTransferRecipient, resolveAccount } from "@/lib/paystack";
 import { nextVendorNo } from "@/lib/ids";
+import { sendSms } from "@/lib/sms";
+import { sendExpoPush } from "@/lib/push";
+
+/** Approve a self-registered (PENDING) vendor. */
+export async function approveVendor(vendorId: string): Promise<void> {
+  const session = await requireRole(["OPERATIONS_MANAGER", "HR_ADMIN"]);
+  const v = await prisma.vendor.findUniqueOrThrow({ where: { id: vendorId } });
+  if (v.status !== "PENDING") return;
+  await prisma.vendor.update({
+    where: { id: vendorId },
+    data: { status: "ACTIVE", vendorNo: v.vendorNo ?? (await nextVendorNo()) },
+  });
+  await sendSms({ to: v.phone, vendorId, body: "Zyntomax: your account has been approved! Open the app and sign in to start recycling." });
+  await sendExpoPush(v.pushToken, "Account approved ✅", "You can now sign in and start requesting pickups.");
+  await audit({ actorId: session.userId, action: "vendor.approve", entity: "Vendor", entityId: vendorId });
+  revalidatePath("/vendors");
+}
+
+/** Reject a self-registered (PENDING) vendor. */
+export async function rejectVendor(vendorId: string): Promise<void> {
+  const session = await requireRole(["OPERATIONS_MANAGER", "HR_ADMIN"]);
+  const v = await prisma.vendor.findUniqueOrThrow({ where: { id: vendorId } });
+  if (v.status !== "PENDING") return;
+  await prisma.vendor.delete({ where: { id: vendorId } });
+  await audit({ actorId: session.userId, action: "vendor.reject", entity: "Vendor", entityId: vendorId, before: { name: v.name, phone: v.phone } });
+  revalidatePath("/vendors");
+}
 
 const vendorSchema = z.object({
   name: z.string().min(2, "Full name is required"),

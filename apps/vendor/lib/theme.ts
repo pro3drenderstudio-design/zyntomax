@@ -1,9 +1,9 @@
 // Zyntomax Vendor — design tokens. Light-first; brand green (#008037).
 
 export const colors = {
-  accent: "#008037",
-  accentDark: "#006b2e",
-  accentSoft: "#d9f7e3",
+  accent: "#22A94E",
+  accentDark: "#178A3E",
+  accentSoft: "#dcf6e2",
   lime: "#7ed957",
   limeSoft: "#edfbe2",
   bg: "#f4f7f5",

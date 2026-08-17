@@ -1,8 +1,10 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../lib/theme";
+import { useI18n } from "../../lib/i18n";
 
 export default function TabsLayout() {
+  const { t } = useI18n();
   return (
     <Tabs
       screenOptions={{
@@ -18,19 +20,19 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: "Home", headerShown: false, tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} /> }}
+        options={{ title: t("home"), headerShown: false, tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} /> }}
       />
       <Tabs.Screen
         name="pickups"
-        options={{ title: "Pickups", tabBarIcon: ({ color, size }) => <Ionicons name="cube" size={size} color={color} /> }}
+        options={{ title: t("pickups"), tabBarIcon: ({ color, size }) => <Ionicons name="cube" size={size} color={color} /> }}
       />
       <Tabs.Screen
         name="wallet"
-        options={{ title: "Wallet", tabBarIcon: ({ color, size }) => <Ionicons name="wallet" size={size} color={color} /> }}
+        options={{ title: t("wallet"), tabBarIcon: ({ color, size }) => <Ionicons name="wallet" size={size} color={color} /> }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: "Profile", tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} /> }}
+        options={{ title: t("profile"), tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} /> }}
       />
     </Tabs>
   );

@@ -60,6 +60,7 @@ export default function RootLayout() {
             }}
           >
             <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="register" options={{ title: "Create account" }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="pickup/new" options={{ title: "Request a pickup", presentation: "modal" }} />
             <Stack.Screen name="pickup/[id]" options={{ title: "Pickup" }} />

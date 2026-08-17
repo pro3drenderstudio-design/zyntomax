@@ -23,6 +23,12 @@ export async function POST(request: NextRequest) {
 
   const vendor = await prisma.vendor.findUnique({ where: { phone } });
   if (!vendor) return NextResponse.json({ error: "Vendor not found." }, { status: 404 });
+  if (vendor.status === "PENDING") {
+    return NextResponse.json({ error: "Your account is awaiting approval. We'll notify you once it's approved." }, { status: 403 });
+  }
+  if (vendor.status !== "ACTIVE") {
+    return NextResponse.json({ error: "This account is not active. Please contact Zyntomax." }, { status: 403 });
+  }
 
   await prisma.vendorOtp.deleteMany({ where: { phone } });
   const token = await issueVendorToken(vendor.id);

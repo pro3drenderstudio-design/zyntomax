@@ -236,6 +236,7 @@ model Locality {
 }
 
 enum VendorStatus {
+  PENDING // self-registered, awaiting admin approval
   ACTIVE
   INACTIVE
   BLACKLISTED

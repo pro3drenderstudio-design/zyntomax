@@ -4,8 +4,9 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getWallet, type WalletData } from "../../lib/api";
 import { Screen, Card, Txt, Row, Badge, Button, EmptyState, Loading, SectionHeader } from "../../lib/ui";
-import { colors, space, radius, type as t } from "../../lib/theme";
+import { colors, space, radius, type as ty } from "../../lib/theme";
 import { naira, shortDate } from "../../lib/format";
+import { useI18n } from "../../lib/i18n";
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: "Processing", APPROVED: "Processing", PAID: "Paid", REJECTED: "Rejected", FAILED: "Failed",
@@ -13,6 +14,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function WalletScreen() {
   const router = useRouter();
+  const { t } = useI18n();
   const [w, setW] = useState<WalletData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -24,15 +26,15 @@ export default function WalletScreen() {
     <Screen refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }}>
       {/* Balance card */}
       <View style={{ backgroundColor: colors.accent, borderRadius: radius.lg, padding: space.lg }}>
-        <Txt variant="tiny" color="rgba(255,255,255,0.85)">AVAILABLE TO WITHDRAW</Txt>
-        <Text style={[t.display, { color: "#fff", marginTop: 4 }]}>{naira(w.available)}</Text>
+        <Txt variant="tiny" color="rgba(255,255,255,0.85)">{t("available_to_withdraw").toUpperCase()}</Txt>
+        <Text style={[ty.display, { color: "#fff", marginTop: 4 }]}>{naira(w.available)}</Text>
         <Row gap={space.sm} style={{ marginTop: space.md }}>
           <View style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: radius.md, padding: space.md }}>
-            <Txt variant="tiny" color="rgba(255,255,255,0.8)">LIFETIME EARNED</Txt>
+            <Txt variant="tiny" color="rgba(255,255,255,0.8)">{t("lifetime_earned").toUpperCase()}</Txt>
             <Txt variant="h3" color="#fff">{naira(w.earned)}</Txt>
           </View>
           <View style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: radius.md, padding: space.md }}>
-            <Txt variant="tiny" color="rgba(255,255,255,0.8)">WITHDRAWN</Txt>
+            <Txt variant="tiny" color="rgba(255,255,255,0.8)">{t("withdrawn").toUpperCase()}</Txt>
             <Txt variant="h3" color="#fff">{naira(w.withdrawn + w.paidOut)}</Txt>
           </View>
         </Row>
@@ -51,7 +53,7 @@ export default function WalletScreen() {
           </Row>
           <View style={{ height: space.md }} />
           <Button
-            title={w.available >= w.minWithdrawal ? "Withdraw to bank" : `Min ₦${w.minWithdrawal.toLocaleString()}`}
+            title={w.available >= w.minWithdrawal ? t("withdraw_to_bank") : `Min ₦${w.minWithdrawal.toLocaleString()}`}
             icon={<Ionicons name="cash" size={18} color="#fff" />}
             disabled={w.available < w.minWithdrawal}
             onPress={() => router.push("/withdraw")}

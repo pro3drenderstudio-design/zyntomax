@@ -6,11 +6,13 @@ import { getHome, logout, type VendorHome } from "../../lib/api";
 import { Screen, Card, Txt, Row, Avatar, Badge, Divider, Loading, SectionHeader } from "../../lib/ui";
 import { colors, space } from "../../lib/theme";
 import { kg } from "../../lib/format";
+import { useI18n } from "../../lib/i18n";
 
 const SUPPORT_PHONE = "08038830882";
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { t } = useI18n();
   const [home, setHome] = useState<VendorHome | null>(null);
 
   const load = useCallback(async () => { try { setHome(await getHome()); } catch { /* keep */ } }, []);
@@ -51,7 +53,7 @@ export default function ProfileScreen() {
 
       {/* Rewards */}
       <View>
-        <SectionHeader title="Rewards" />
+        <SectionHeader title={t("rewards")} />
         <Card style={{ padding: space.sm }}>
           {home.rewards.tiers.length === 0 ? (
             <Txt variant="small" color={colors.muted} style={{ padding: space.md }}>No reward tiers yet.</Txt>
@@ -74,30 +76,30 @@ export default function ProfileScreen() {
 
       {/* Settings */}
       <View>
-        <SectionHeader title="Account" />
+        <SectionHeader title={t("account")} />
         <Card style={{ padding: 0 }}>
-          <SettingRow icon="create-outline" label="Edit profile" onPress={() => router.push("/account/edit")} />
+          <SettingRow icon="create-outline" label={t("edit_profile")} onPress={() => router.push("/account/edit")} />
           <Divider />
-          <SettingRow icon="shield-checkmark-outline" label="Bank & KYC" onPress={() => router.push("/account/kyc")} />
+          <SettingRow icon="shield-checkmark-outline" label={t("bank_kyc")} onPress={() => router.push("/account/kyc")} />
           <Divider />
-          <SettingRow icon="stats-chart-outline" label="Sales history" onPress={() => router.push("/history")} />
+          <SettingRow icon="stats-chart-outline" label={t("sales_history")} onPress={() => router.push("/history")} />
           <Divider />
-          <SettingRow icon="pricetags-outline" label="Today's rates" onPress={() => router.push("/rates")} />
+          <SettingRow icon="pricetags-outline" label={t("todays_rates")} onPress={() => router.push("/rates")} />
           <Divider />
-          <SettingRow icon="gift-outline" label="Invite & earn" onPress={() => router.push("/referral")} />
+          <SettingRow icon="gift-outline" label={t("invite_earn")} onPress={() => router.push("/referral")} />
           <Divider />
-          <SettingRow icon="settings-outline" label="Settings & language" onPress={() => router.push("/account/settings")} />
+          <SettingRow icon="settings-outline" label={t("settings_language")} onPress={() => router.push("/account/settings")} />
         </Card>
       </View>
 
       <View>
-        <SectionHeader title="Support" />
+        <SectionHeader title={t("support")} />
         <Card style={{ padding: 0 }}>
           <SettingRow icon="call-outline" label={`Call us · ${SUPPORT_PHONE}`} onPress={() => Linking.openURL(`tel:${SUPPORT_PHONE}`)} />
           <Divider />
-          <SettingRow icon="chatbubble-ellipses-outline" label="Help & FAQ" onPress={() => router.push("/help")} />
+          <SettingRow icon="chatbubble-ellipses-outline" label={t("help_faq")} onPress={() => router.push("/help")} />
           <Divider />
-          <SettingRow icon="log-out-outline" label="Sign out" tint={colors.destructive} onPress={signOut} />
+          <SettingRow icon="log-out-outline" label={t("sign_out")} tint={colors.destructive} onPress={signOut} />
         </Card>
       </View>
 
