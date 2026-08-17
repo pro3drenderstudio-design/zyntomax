@@ -28,6 +28,7 @@ export default async function DashboardPage() {
     monthCollected,
     monthPurchased,
     monthSales,
+    pendingPickups,
   ] = await Promise.all([
     prisma.vendor.count({ where: { ...siteWhere, status: "ACTIVE" } }),
     prisma.trip.findMany({
@@ -78,6 +79,9 @@ export default async function DashboardPage() {
     prisma.invoice.aggregate({
       _sum: { amount: true },
       where: { createdAt: { gte: monthStart } },
+    }),
+    prisma.pickupRequest.count({
+      where: { status: "PENDING", ...(siteIds ? { vendor: { siteId: { in: siteIds } } } : {}) },
     }),
   ]);
 
@@ -198,6 +202,14 @@ export default async function DashboardPage() {
             <h2 className="font-medium">Needs attention</h2>
           </div>
           <ul className="flex flex-col gap-2 text-sm">
+            {pendingPickups > 0 && (
+              <li>
+                <Link href="/pickups?status=PENDING" className="flex items-center justify-between rounded-md bg-warning-soft px-3 py-2 text-warning hover:opacity-90">
+                  <span>{pendingPickups} pickup request{pendingPickups > 1 ? "s" : ""} awaiting a collector</span>
+                  <span aria-hidden>→</span>
+                </Link>
+              </li>
+            )}
             {flaggedJobs > 0 && (
               <li>
                 <Link href="/production?status=FLAGGED" className="flex items-center justify-between rounded-md bg-destructive-soft px-3 py-2 text-destructive hover:opacity-90">
@@ -227,7 +239,7 @@ export default async function DashboardPage() {
                 </Link>
               </li>
             )}
-            {flaggedJobs === 0 && pendingBatches.length === 0 && Number(openInvoices._sum.amount ?? 0) === 0 && (
+            {pendingPickups === 0 && flaggedJobs === 0 && pendingBatches.length === 0 && Number(openInvoices._sum.amount ?? 0) === 0 && (
               <li className="py-6 text-center text-muted">All clear. Nothing pending.</li>
             )}
           </ul>

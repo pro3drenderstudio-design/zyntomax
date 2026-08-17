@@ -31,6 +31,7 @@ export default async function TripDetailPage({
       },
       reconciliation: { include: { items: { include: { materialType: true } } } },
       payoutBatch: { include: { payouts: true } },
+      pickupRequests: { include: { vendor: true }, orderBy: { createdAt: "desc" } },
     },
   });
   if (!trip) notFound();
@@ -101,6 +102,33 @@ export default async function TripDetailPage({
             </form>
           )}
         </div>
+      )}
+
+      {/* Pickup requests on this trip */}
+      {trip.pickupRequests.length > 0 && (
+        <Card className="mt-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="font-medium">Pickup requests on this trip ({trip.pickupRequests.length})</h2>
+            <Link href="/pickups" className="text-sm text-accent hover:underline">All pickups</Link>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {trip.pickupRequests.map((p) => (
+              <Link key={p.id} href={`/pickups/${p.id}`} className="flex items-center gap-2.5 rounded-md border border-border p-2 hover:bg-muted-bg">
+                {p.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.photoUrl} alt="" className="h-10 w-10 rounded object-cover" />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded bg-muted-bg text-xs text-muted">—</div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{p.vendor.name}</p>
+                  <p className="text-xs text-muted">{p.estWeightKg ? formatKg(Number(p.estWeightKg)) : "weight TBD"}</p>
+                </div>
+                <Badge tone={statusTone(p.status)}>{p.status}</Badge>
+              </Link>
+            ))}
+          </div>
+        </Card>
       )}
 
       {/* Manifest by material */}
