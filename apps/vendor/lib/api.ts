@@ -138,8 +138,8 @@ export type WalletData = {
   withdrawals: Withdrawal[];
 };
 export async function getWallet(): Promise<WalletData> { return auth<WalletData>("/api/vendor/wallet"); }
-export async function requestWithdrawal(amount: number): Promise<void> {
-  await auth("/api/vendor/withdrawals", { method: "POST", json: { amount } });
+export async function requestWithdrawal(amount: number): Promise<{ status: string; instant: boolean }> {
+  return auth("/api/vendor/withdrawals", { method: "POST", json: { amount } });
 }
 
 export type Bank = { name: string; code: string };

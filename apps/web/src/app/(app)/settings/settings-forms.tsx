@@ -83,6 +83,9 @@ export function GeneralSettingsForm({
     { key: "production.tolerance_pct", label: "Production discrepancy tolerance (%)" },
     { key: "payout.sla_hours", label: "Vendor payout SLA (hours)" },
     { key: "payroll.advance_cap_pct", label: "Max advance deduction per week (% of wage)" },
+    { key: "wallet.min_withdrawal", label: "Minimum vendor withdrawal (₦)" },
+    { key: "wallet.instant_limit", label: "Instant payout limit per withdrawal (₦)" },
+    { key: "wallet.instant_daily_cap", label: "Instant payout daily cap per vendor (₦)" },
   ];
   return (
     <form action={formAction} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

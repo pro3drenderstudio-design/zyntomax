@@ -37,6 +37,9 @@ export default async function SettingsPage() {
     "production.tolerance_pct": await getSetting("production.tolerance_pct", 2),
     "payout.sla_hours": await getSetting("payout.sla_hours", 24),
     "payroll.advance_cap_pct": await getSetting("payroll.advance_cap_pct", 50),
+    "wallet.min_withdrawal": await getSetting("wallet.min_withdrawal", 1000),
+    "wallet.instant_limit": await getSetting("wallet.instant_limit", 20000),
+    "wallet.instant_daily_cap": await getSetting("wallet.instant_daily_cap", 50000),
   };
 
   // Current effective rates (latest per key)

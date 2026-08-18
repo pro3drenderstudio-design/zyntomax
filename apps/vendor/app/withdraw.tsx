@@ -25,8 +25,12 @@ export default function WithdrawScreen() {
     if (w && amt < w.minWithdrawal) return setError(`Minimum withdrawal is ${naira(w.minWithdrawal)}.`);
     setBusy(true); setError(null);
     try {
-      await requestWithdrawal(amt);
-      Alert.alert("Withdrawal requested", "We’re processing your withdrawal. You’ll get an SMS when it’s paid.");
+      const res = await requestWithdrawal(amt);
+      if (res.instant) {
+        Alert.alert("Paid! 💸", `${naira(amt)} has been sent to your bank account.`);
+      } else {
+        Alert.alert("Withdrawal requested", "We’re processing your withdrawal. You’ll get an SMS when it’s paid.");
+      }
       router.replace("/(tabs)/wallet");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not submit withdrawal");
@@ -56,7 +60,7 @@ export default function WithdrawScreen() {
 
       <ErrorText>{error}</ErrorText>
       <Button title="Confirm withdrawal" loading={busy} onPress={submit} icon={<Ionicons name="cash" size={18} color="#fff" />} />
-      <Txt variant="tiny" color={colors.mutedLight} center>Withdrawals are reviewed and paid to your verified bank account.</Txt>
+      <Txt variant="tiny" color={colors.mutedLight} center>Most withdrawals are paid to your bank instantly. Larger amounts may be reviewed first.</Txt>
     </Screen>
   );
 }

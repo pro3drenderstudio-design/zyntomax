@@ -3,7 +3,10 @@ import { prisma } from "@zyntomax/db";
 import { vendorFromRequest } from "@/lib/vendor-auth";
 import { vendorBalance } from "@/lib/vendor-wallet";
 import { getSetting } from "@/lib/settings";
+import { isSimulated } from "@/lib/paystack";
+import { companyFloat, payWithdrawal } from "@/lib/withdrawals";
 import { sendSms } from "@/lib/sms";
+import { startOfDay } from "date-fns";
 
 export async function GET(request: NextRequest) {
   const vendorId = await vendorFromRequest(request);
@@ -17,7 +20,11 @@ export async function GET(request: NextRequest) {
   });
 }
 
-/** Request a withdrawal to the vendor's verified bank account. */
+/**
+ * Request a withdrawal. Auto-pays instantly when the vendor is bank-verified,
+ * the amount is within the instant limit + daily cap, and the float can cover
+ * it — otherwise it drops to the admin review queue (PENDING).
+ */
 export async function POST(request: NextRequest) {
   const vendorId = await vendorFromRequest(request);
   if (!vendorId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -34,7 +41,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Minimum withdrawal is ₦${min.toLocaleString("en-NG")}.` }, { status: 422 });
   }
 
-  // No overlapping pending request
   const openReq = await prisma.withdrawal.findFirst({ where: { vendorId, status: { in: ["PENDING", "APPROVED"] } } });
   if (openReq) {
     return NextResponse.json({ error: "You already have a withdrawal being processed." }, { status: 409 });
@@ -45,7 +51,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `You can withdraw up to ₦${balance.available.toLocaleString("en-NG")}.` }, { status: 422 });
   }
 
-  const w = await prisma.withdrawal.create({
+  const withdrawal = await prisma.withdrawal.create({
     data: {
       vendorId,
       amount,
@@ -55,11 +61,35 @@ export async function POST(request: NextRequest) {
       idempotencyKey: `wd_${vendorId}_${Date.now()}`,
     },
   });
+
+  // ── Instant auto-approval rules ──────────────────────────────────────
+  const [instantLimit, dailyCap] = await Promise.all([
+    getSetting<number>("wallet.instant_limit", 20000, vendor.siteId),
+    getSetting<number>("wallet.instant_daily_cap", 50000, vendor.siteId),
+  ]);
+  const dayStart = startOfDay(new Date());
+  const paidToday = await prisma.withdrawal.aggregate({
+    where: { vendorId, status: { in: ["PAID", "APPROVED"] }, processedAt: { gte: dayStart } },
+    _sum: { amount: true },
+  });
+  const usedToday = Number(paidToday._sum.amount ?? 0);
+  const floatOk = isSimulated() || (await companyFloat()) >= amount;
+
+  const instantEligible = amount <= instantLimit && usedToday + amount <= dailyCap && floatOk;
+
+  if (instantEligible) {
+    const res = await payWithdrawal(withdrawal.id, null);
+    if (res.ok) {
+      return NextResponse.json({ id: withdrawal.id, status: res.status, instant: true });
+    }
+    // Transfer failed — route to manual review instead of leaving it failed.
+    await prisma.withdrawal.update({ where: { id: withdrawal.id }, data: { status: "PENDING", failureReason: null } });
+  }
+
   await sendSms({
     to: vendor.phone,
     vendorId,
     body: `Zyntomax: your withdrawal of ₦${amount.toLocaleString("en-NG")} is being processed. We'll notify you when it's paid.`,
   });
-
-  return NextResponse.json({ id: w.id, status: w.status });
+  return NextResponse.json({ id: withdrawal.id, status: "PENDING", instant: false });
 }

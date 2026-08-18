@@ -20,6 +20,9 @@ export async function saveSettings(
     "production.tolerance_pct",
     "payout.sla_hours",
     "payroll.advance_cap_pct",
+    "wallet.min_withdrawal",
+    "wallet.instant_limit",
+    "wallet.instant_daily_cap",
   ];
   for (const key of numericKeys) {
     const raw = formData.get(key);
