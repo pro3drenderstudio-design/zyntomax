@@ -237,6 +237,56 @@ export async function getReport(month?: string): Promise<Pnl> {
   return api(`/api/mobile/reports${month ? `?month=${month}` : ""}`);
 }
 
+/* ── People / payroll ────────────────────────────────────────────── */
+export type StaffRow = { id: string; staffNo: string; name: string; phone: string; title: string | null; wageModel: string; status: string; roles: string[] };
+export type PayslipRow = { id: string; weekStart: string; earnedAmount: number; advanceDeduction: number; discrepancyDeduction: number; netAmount: number; paid: boolean };
+export type StaffDetail = {
+  id: string; staffNo: string; name: string; phone: string; title: string | null;
+  wageModel: string; baseSalaryWeekly: number | null; status: string; hireDate: string | null;
+  roles: string[]; outstandingAdvance: number; totalEarned: number; payslips: PayslipRow[];
+};
+
+export async function getStaff(): Promise<{ staff: StaffRow[] }> {
+  return api("/api/mobile/staff");
+}
+export async function getStaffMember(id: string): Promise<StaffDetail> {
+  return api(`/api/mobile/staff/${id}`);
+}
+export async function setStaffStatus(id: string, status: "ACTIVE" | "SUSPENDED" | "EXITED"): Promise<{ status: string }> {
+  return api(`/api/mobile/staff/${id}/status`, { method: "POST", json: { status } });
+}
+
+export type PayrollRunRow = { id: string; site: string; weekStart: string; weekEnd: string; status: string; staffCount: number; unpaidCount: number; netTotal: number };
+export type PayrollData = { sites: { id: string; name: string }[]; runs: PayrollRunRow[] };
+export type PayrollItemRow = {
+  id: string; staff: string; staffNo: string; commissionAmount: number; baseAmount: number;
+  advanceDeduction: number; discrepancyDeduction: number; netAmount: number; paid: boolean; paymentRef: string | null;
+};
+export type PayrollRunDetail = { id: string; site: string; weekStart: string; weekEnd: string; status: string; canPay: boolean; netTotal: number; items: PayrollItemRow[] };
+
+export async function getPayroll(): Promise<PayrollData> {
+  return api("/api/mobile/payroll");
+}
+export async function openPayroll(siteId: string): Promise<{ staff: number }> {
+  return api("/api/mobile/payroll", { method: "POST", json: { siteId } });
+}
+export async function getPayrollRun(id: string): Promise<PayrollRunDetail> {
+  return api(`/api/mobile/payroll/${id}`);
+}
+export async function payPayrollItem(itemId: string, paymentRef?: string): Promise<{ ok: boolean }> {
+  return api(`/api/mobile/payroll/items/${itemId}/pay`, { method: "POST", json: { paymentRef } });
+}
+
+export type MyEarnings = {
+  staffNo: string; title: string | null; wageModel: string;
+  commissionAmount: number; baseAmount: number; earnedAmount: number; jobCount: number;
+  jobs: { id: string; stage: string; material: string; basisKg: number; wage: number; completedAt: string | null }[];
+  outstandingAdvance: number; payslips: PayslipRow[];
+};
+export async function getMyEarnings(): Promise<MyEarnings> {
+  return api("/api/mobile/me/earnings");
+}
+
 /** Post the agent's GPS during a trip (best-effort; ignores failures). */
 export async function postLocation(lat: number, lng: number, tripId?: string): Promise<void> {
   try {

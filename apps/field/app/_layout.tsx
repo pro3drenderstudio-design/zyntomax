@@ -69,6 +69,11 @@ export default function RootLayout() {
             <Stack.Screen name="expenses" options={{ title: "Expenses" }} />
             <Stack.Screen name="expense-new" options={{ title: "Record expense", presentation: "modal" }} />
             <Stack.Screen name="reports" options={{ title: "P&L report" }} />
+            <Stack.Screen name="staff" options={{ title: "Staff" }} />
+            <Stack.Screen name="staff/[id]" options={{ title: "Staff member" }} />
+            <Stack.Screen name="payroll" options={{ title: "Payroll" }} />
+            <Stack.Screen name="payroll/[id]" options={{ title: "Payroll run" }} />
+            <Stack.Screen name="earnings" options={{ title: "My earnings" }} />
             <Stack.Screen name="outbox" options={{ title: "Offline sync" }} />
             <Stack.Screen name="soon" options={{ title: "Coming soon" }} />
           </Stack>

@@ -112,3 +112,60 @@ export async function computeEarnings(siteId: string): Promise<StaffEarning[]> {
     (e) => e.commissionAmount > 0 || e.baseAmount > 0,
   );
 }
+
+export type StaffLiveEarnings = {
+  wageModel: string;
+  commissionAmount: number;
+  baseAmount: number;
+  earnedAmount: number;
+  jobCount: number;
+  jobs: { id: string; stage: string; material: string; basisKg: number; wage: number; completedAt: Date | null }[];
+};
+
+/**
+ * One staff member's outstanding (un-payrolled) earnings across all their jobs,
+ * using the same piece-rate + wage-model math as computeEarnings. Powers the
+ * "my earnings this period" view; the payroll run still applies deductions.
+ */
+export async function computeStaffEarnings(staffId: string): Promise<StaffLiveEarnings> {
+  const staff = await prisma.staffProfile.findUnique({
+    where: { id: staffId },
+    select: { wageModel: true, baseSalaryWeekly: true },
+  });
+  const wageModel = staff?.wageModel ?? "COMMISSION";
+
+  const jobs = await prisma.job.findMany({
+    where: {
+      status: { in: ["COMPLETED", "RESOLVED"] },
+      payrollRunId: null,
+      assignments: { some: { staffId } },
+    },
+    include: { assignments: true, stage: true, materialType: true },
+  });
+
+  let commissionAmount = 0;
+  const detail: StaffLiveEarnings["jobs"] = [];
+  for (const job of jobs) {
+    const basisKg =
+      job.stage.payBasis === "SCALE_IN" ? Number(job.weightInKg) : Number(job.weightOutKg ?? 0);
+    if (basisKg <= 0) continue;
+    const rate = await rateFor(job.stageId, job.materialTypeId, job.completedAt ?? new Date(), job.siteId);
+    if (rate === null) continue;
+    const mine = job.assignments.find((a) => a.staffId === staffId);
+    const share = mine ? Number(mine.share) : 0;
+    const wage = wageModel === "SALARY" ? 0 : basisKg * rate * share;
+    commissionAmount += wage;
+    detail.push({ id: job.id, stage: job.stage.name, material: job.materialType.name, basisKg, wage, completedAt: job.completedAt });
+  }
+
+  const baseAmount = wageModel === "COMMISSION" ? 0 : Number(staff?.baseSalaryWeekly ?? 0);
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return {
+    wageModel,
+    commissionAmount: round(commissionAmount),
+    baseAmount: round(baseAmount),
+    earnedAmount: round(commissionAmount + baseAmount),
+    jobCount: detail.length,
+    jobs: detail,
+  };
+}

@@ -47,8 +47,14 @@ export const MODULES: ModuleSection[] = [
   {
     section: "People",
     items: [
-      { key: "staff", label: "Staff", icon: "id-card-outline", href: "/soon", roles: ["HR_ADMIN", "OPERATIONS_MANAGER"], built: false },
-      { key: "payroll", label: "Payroll", icon: "wallet-outline", href: "/soon", roles: ["HR_ADMIN", "FINANCE_ADMIN"], built: false },
+      { key: "staff", label: "Staff", icon: "id-card-outline", href: "/staff", roles: ["HR_ADMIN", "OPERATIONS_MANAGER"], built: true },
+      { key: "payroll", label: "Payroll", icon: "wallet-outline", href: "/payroll", roles: ["HR_ADMIN", "FINANCE_ADMIN"], built: true },
+    ],
+  },
+  {
+    section: "Personal",
+    items: [
+      { key: "earnings", label: "My Earnings", icon: "cash-outline", href: "/earnings", roles: ["*"], built: true },
     ],
   },
 ];
