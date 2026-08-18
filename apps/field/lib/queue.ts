@@ -1,17 +1,21 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
-import { api } from "./api";
+import { api, uploadPhoto } from "./api";
 
 /**
- * Offline outbox. Weigh-ins and vendor registrations queue locally and sync
- * when connectivity returns. Every item carries a clientUuid, and the server
- * dedupes on it, so retrying is always safe.
+ * Offline outbox. Weigh-ins and vendor registrations queue locally and sync when
+ * connectivity returns. Every item carries a clientUuid, and the server dedupes
+ * on it, so retrying is always safe. Photos/signatures are captured as local
+ * file URIs and uploaded at sync time (they can't upload while offline).
  */
+
+export type PendingUploads = { photoUri?: string; signatureUri?: string };
 
 export type QueueItem = {
   clientUuid: string;
   kind: "weighin" | "vendor";
   payload: Record<string, unknown>;
+  uploads?: PendingUploads;
   createdAt: string;
   lastError?: string;
 };
@@ -33,13 +37,21 @@ export async function enqueue(item: Omit<QueueItem, "createdAt">): Promise<void>
   await saveQueue(queue);
 }
 
+/** Upload any pending local images and merge their URLs into the payload. */
+async function applyUploads(payload: Record<string, unknown>, uploads?: PendingUploads): Promise<Record<string, unknown>> {
+  if (!uploads) return payload;
+  const out = { ...payload };
+  if (uploads.photoUri) out.photoUrl = await uploadPhoto(uploads.photoUri);
+  if (uploads.signatureUri) out.signatureUrl = await uploadPhoto(uploads.signatureUri);
+  return out;
+}
+
+const pathFor = (kind: QueueItem["kind"]) => (kind === "weighin" ? "/api/mobile/weighins" : "/api/mobile/vendors");
+
 /** Push everything in the outbox. Returns [synced, remaining]. */
 export async function flushQueue(): Promise<[number, number]> {
   const state = await NetInfo.fetch();
-  if (!state.isConnected) {
-    const q = await getQueue();
-    return [0, q.length];
-  }
+  if (!state.isConnected) return [0, (await getQueue()).length];
 
   const queue = await getQueue();
   const remaining: QueueItem[] = [];
@@ -47,19 +59,16 @@ export async function flushQueue(): Promise<[number, number]> {
 
   for (const item of queue) {
     try {
-      if (item.kind === "weighin") {
-        await api("/api/mobile/weighins", { method: "POST", json: item.payload });
-      } else {
-        await api("/api/mobile/vendors", { method: "POST", json: item.payload });
+      // Upload photos first; on success, bake the URLs in and drop the local
+      // URIs so a later submit-failure retry never re-uploads.
+      if (item.uploads) {
+        item.payload = await applyUploads(item.payload, item.uploads);
+        item.uploads = undefined;
       }
+      await api(pathFor(item.kind), { method: "POST", json: item.payload });
       synced++;
     } catch (e) {
-      // 4xx validation errors won't succeed on retry either, but keeping them
-      // visible in the outbox beats losing field data silently.
-      remaining.push({
-        ...item,
-        lastError: e instanceof Error ? e.message : "Sync failed",
-      });
+      remaining.push({ ...item, lastError: e instanceof Error ? e.message : "Sync failed" });
     }
   }
 
@@ -72,19 +81,18 @@ export async function submitOrQueue(
   kind: QueueItem["kind"],
   clientUuid: string,
   payload: Record<string, unknown>,
+  uploads?: PendingUploads,
 ): Promise<"sent" | "queued"> {
   try {
-    const path = kind === "weighin" ? "/api/mobile/weighins" : "/api/mobile/vendors";
-    await api(path, { method: "POST", json: payload });
+    const finalPayload = await applyUploads(payload, uploads);
+    await api(pathFor(kind), { method: "POST", json: finalPayload });
     return "sent";
   } catch (e) {
-    // Server-side validation errors (thrown with a message) are re-thrown so
-    // the user can fix the form; network failures get queued.
-    if (e instanceof Error && !/network|fetch|failed \(5/i.test(e.message)) {
-      const looksLikeNetwork = /Network request failed|Failed to fetch/i.test(e.message);
-      if (!looksLikeNetwork) throw e;
-    }
-    await enqueue({ clientUuid, kind, payload });
+    // Genuine server validation errors (not network) should surface to the user.
+    const msg = e instanceof Error ? e.message : "";
+    const looksLikeNetwork = /Network request failed|Failed to fetch|timed out|Request failed \(5/i.test(msg);
+    if (!looksLikeNetwork && msg) throw e;
+    await enqueue({ clientUuid, kind, payload, uploads });
     return "queued";
   }
 }

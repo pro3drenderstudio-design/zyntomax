@@ -11,6 +11,8 @@ const weighInSchema = z.object({
   weightKg: z.number().positive(),
   lat: z.number().optional().nullable(),
   lng: z.number().optional().nullable(),
+  photoUrl: z.string().optional().nullable(),
+  signatureUrl: z.string().optional().nullable(),
 });
 
 /** Offline-queue sync target — idempotent on clientUuid. */
@@ -30,6 +32,8 @@ export async function POST(request: NextRequest) {
     ...parsed.data,
     lat: parsed.data.lat ?? undefined,
     lng: parsed.data.lng ?? undefined,
+    photoUrl: parsed.data.photoUrl ?? undefined,
+    signatureUrl: parsed.data.signatureUrl ?? undefined,
     agentId: session.userId,
   });
 

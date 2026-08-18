@@ -10,6 +10,7 @@ export type WeighInInput = {
   lat?: number;
   lng?: number;
   photoUrl?: string;
+  signatureUrl?: string;
   agentId: string;
 };
 
@@ -61,8 +62,9 @@ export async function recordWeighIn(input: WeighInInput): Promise<WeighInResult>
         lat: input.lat,
         lng: input.lng,
         photoUrl: input.photoUrl,
+        signatureUrl: input.signatureUrl,
         agentId: input.agentId,
-        confirmation: "NONE",
+        confirmation: input.signatureUrl ? "SIGNATURE" : "NONE",
       },
     }),
     prisma.inventoryMovement.create({

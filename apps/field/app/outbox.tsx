@@ -1,79 +1,58 @@
 import { useCallback, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { View } from "react-native";
 import { useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { getQueue, flushQueue, type QueueItem } from "../lib/queue";
-import { Button, Card } from "../lib/ui";
-import { colors } from "../lib/theme";
+import { Screen, Card, Txt, Row, Button, Badge, EmptyState } from "../lib/ui";
+import { colors, space } from "../lib/theme";
+import { relativeDate } from "../lib/format";
 
 export default function OutboxScreen() {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setItems(await getQueue());
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
+  const load = useCallback(async () => { setItems(await getQueue()); }, []);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function sync() {
     setBusy(true);
     const [synced, remaining] = await flushQueue();
-    setMessage(
-      synced > 0
-        ? `${synced} record${synced > 1 ? "s" : ""} synced. ${remaining} remaining.`
-        : remaining > 0
-          ? "Nothing synced — check your connection."
-          : "Outbox is empty.",
-    );
-    await load();
-    setBusy(false);
+    setMessage(synced > 0 ? `${synced} synced · ${remaining} remaining` : remaining > 0 ? "Nothing synced — check your connection." : "Outbox is empty.");
+    await load(); setBusy(false);
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: 16 }}>
-      <Button title={busy ? "Syncing…" : "Sync now"} onPress={sync} disabled={busy} />
-      {message && (
-        <Text style={{ color: colors.muted, marginTop: 8, textAlign: "center" }}>{message}</Text>
-      )}
-      <View style={{ height: 16 }} />
+    <Screen>
+      <Card style={{ backgroundColor: items.length > 0 ? colors.infoSoft : colors.successSoft, borderColor: "transparent" }}>
+        <Row gap={space.sm}>
+          <Ionicons name={items.length > 0 ? "cloud-upload" : "checkmark-circle"} size={20} color={items.length > 0 ? colors.info : colors.success} />
+          <Txt variant="bodyStrong" color={items.length > 0 ? colors.info : colors.success}>
+            {items.length > 0 ? `${items.length} record${items.length > 1 ? "s" : ""} waiting to sync` : "Everything is synced"}
+          </Txt>
+        </Row>
+      </Card>
+
+      <Button title="Sync now" loading={busy} onPress={sync} icon={<Ionicons name="sync" size={18} color="#fff" />} />
+      {message && <Txt variant="small" color={colors.muted} center>{message}</Txt>}
+
       {items.length === 0 ? (
-        <Card>
-          <Text style={{ color: colors.muted, textAlign: "center", paddingVertical: 12 }}>
-            No pending records — everything is on the server.
-          </Text>
-        </Card>
+        <Card><EmptyState icon={<Ionicons name="cloud-done-outline" size={32} color={colors.mutedLight} />} title="Nothing pending" subtitle="Weigh-ins and registrations captured offline appear here until they sync." /></Card>
       ) : (
         items.map((item) => (
-          <Card key={item.clientUuid} style={{ marginBottom: 8 }}>
-            <Text style={{ fontWeight: "600", color: colors.text }}>
-              {item.kind === "weighin" ? "Weigh-in" : "Vendor registration"}
-            </Text>
-            <Text style={{ fontSize: 12, color: colors.muted }}>
-              {new Date(item.createdAt).toLocaleString("en-NG")}
-            </Text>
-            {item.kind === "weighin" && (
-              <Text style={{ color: colors.text, marginTop: 4 }}>
-                {String(item.payload.weightKg)} kg
-              </Text>
-            )}
-            {item.kind === "vendor" && (
-              <Text style={{ color: colors.text, marginTop: 4 }}>
-                {String(item.payload.name)} · {String(item.payload.phone)}
-              </Text>
-            )}
-            {item.lastError && (
-              <Text style={{ color: colors.destructive, fontSize: 12, marginTop: 4 }}>
-                Last error: {item.lastError}
-              </Text>
-            )}
+          <Card key={item.clientUuid}>
+            <Row justify="space-between">
+              <Txt variant="bodyStrong">{item.kind === "weighin" ? "Weigh-in" : "Vendor registration"}</Txt>
+              {item.uploads?.photoUri || item.uploads?.signatureUri ? <Badge label="+ photo" status="PENDING" /> : null}
+            </Row>
+            <Txt variant="small" color={colors.muted}>{relativeDate(item.createdAt)}</Txt>
+            <Txt variant="body" style={{ marginTop: 4 }}>
+              {item.kind === "weighin" ? `${String(item.payload.weightKg)} kg` : `${String(item.payload.name)} · ${String(item.payload.phone)}`}
+            </Txt>
+            {item.lastError ? <Txt variant="small" color={colors.destructive} style={{ marginTop: 4 }}>Last error: {item.lastError}</Txt> : null}
           </Card>
         ))
       )}
-    </ScrollView>
+    </Screen>
   );
 }

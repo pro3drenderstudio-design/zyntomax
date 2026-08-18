@@ -1,68 +1,60 @@
 import { useCallback, useState } from "react";
-import { ScrollView, Text, View, StyleSheet, RefreshControl, Linking } from "react-native";
+import { View, Linking } from "react-native";
 import { useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { getPickups, type Pickup } from "../lib/api";
 import { navigateTo } from "../lib/navigate";
-import { Card, Button } from "../lib/ui";
 import { useLocationPing } from "../lib/use-location-ping";
-import { colors } from "../lib/theme";
+import { Screen, Card, Txt, Row, Button, Badge, EmptyState, Loading } from "../lib/ui";
+import { MiniMap, type MapPoint } from "../lib/map";
+import { colors, space } from "../lib/theme";
+import { kg } from "../lib/format";
 
 export default function PickupsScreen() {
-  const [pickups, setPickups] = useState<Pickup[]>([]);
+  const [pickups, setPickups] = useState<Pickup[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  useLocationPing(undefined, true); // share location while browsing pickups
+  const [view, setView] = useState<"list" | "map">("list");
 
-  const load = useCallback(async () => {
-    try {
-      setPickups(await getPickups());
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load pickups");
-    }
-  }, []);
-
+  useLocationPing(undefined, true);
+  const load = useCallback(async () => { try { setPickups(await getPickups()); } catch { setPickups([]); } }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  if (pickups === null) return <Loading />;
+
+  const pins: MapPoint[] = pickups
+    .filter((p) => p.vendor.lat != null && p.vendor.lng != null)
+    .map((p) => ({ lat: p.vendor.lat!, lng: p.vendor.lng!, label: p.vendor.name, color: p.status === "PENDING" ? "#d97706" : "#2563eb" }));
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      contentContainerStyle={{ padding: 16 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
-    >
-      {error && <Card style={{ marginBottom: 12 }}><Text style={{ color: colors.destructive }}>{error}</Text></Card>}
-      {pickups.length === 0 && !error && (
-        <Card><Text style={{ color: colors.muted, textAlign: "center", paddingVertical: 12 }}>No pending pickup requests.</Text></Card>
+    <Screen refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }}>
+      <Row gap={space.sm}>
+        <View style={{ flex: 1 }}><Button title="List" small variant={view === "list" ? "primary" : "secondary"} onPress={() => setView("list")} /></View>
+        <View style={{ flex: 1 }}><Button title="Map" small variant={view === "map" ? "primary" : "secondary"} onPress={() => setView("map")} /></View>
+      </Row>
+
+      {view === "map" ? (
+        pins.length === 0 ? (
+          <Card><EmptyState icon={<Ionicons name="map-outline" size={32} color={colors.mutedLight} />} title="No pinned pickups" subtitle="Pickups with a location will appear on the map." /></Card>
+        ) : <MiniMap points={pins} height={420} />
+      ) : pickups.length === 0 ? (
+        <Card><EmptyState icon={<Ionicons name="cube-outline" size={32} color={colors.mutedLight} />} title="No pickup requests" subtitle="New vendor pickup requests will show up here." /></Card>
+      ) : (
+        pickups.map((p) => (
+          <Card key={p.id}>
+            <Row justify="space-between">
+              <Txt variant="bodyStrong">{p.vendor.name}</Txt>
+              <Badge label={p.status} status={p.status} />
+            </Row>
+            <Txt variant="small" color={colors.muted}>{p.vendor.locality ?? "—"}{p.estWeightKg ? ` · ~${kg(p.estWeightKg)}` : ""}</Txt>
+            {p.vendor.address ? <Txt variant="small" color={colors.muted}>{p.vendor.address}</Txt> : null}
+            <Row gap={space.sm} style={{ marginTop: space.md }}>
+              <View style={{ flex: 1 }}><Button title="Call" small variant="secondary" icon={<Ionicons name="call-outline" size={16} color={colors.text} />} onPress={() => Linking.openURL(`tel:${p.vendor.phone}`)} /></View>
+              {p.vendor.lat != null && p.vendor.lng != null && (
+                <View style={{ flex: 1 }}><Button title="Navigate" small icon={<Ionicons name="navigate-outline" size={16} color="#fff" />} onPress={() => navigateTo(p.vendor.lat!, p.vendor.lng!, p.vendor.name)} /></View>
+              )}
+            </Row>
+          </Card>
+        ))
       )}
-      {pickups.map((p) => (
-        <Card key={p.id} style={{ marginBottom: 10 }}>
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{p.vendor.name}</Text>
-              <Text style={styles.meta}>
-                {p.vendor.locality ?? "—"}{p.estWeightKg ? ` · ~${p.estWeightKg} kg` : ""}
-              </Text>
-              {p.vendor.address ? <Text style={styles.meta}>{p.vendor.address}</Text> : null}
-            </View>
-          </View>
-          <View style={styles.actions}>
-            {p.vendor.lat != null && p.vendor.lng != null ? (
-              <Button title="Navigate" onPress={() => navigateTo(p.vendor.lat!, p.vendor.lng!, p.vendor.name)} />
-            ) : (
-              <Text style={{ color: colors.muted, fontSize: 12 }}>No pinned location</Text>
-            )}
-            <View style={{ height: 8 }} />
-            <Button title="Call vendor" variant="secondary" onPress={() => Linking.openURL(`tel:${p.vendor.phone}`)} />
-          </View>
-        </Card>
-      ))}
-    </ScrollView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center" },
-  name: { fontSize: 16, fontWeight: "600", color: colors.text },
-  meta: { fontSize: 13, color: colors.muted, marginTop: 1 },
-  actions: { marginTop: 10 },
-});

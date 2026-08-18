@@ -1,93 +1,56 @@
 import { useCallback, useState } from "react";
-import { ScrollView, Text, Pressable, StyleSheet, RefreshControl } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { api, type TripSummary } from "../lib/api";
-import { Card } from "../lib/ui";
-import { colors } from "../lib/theme";
+import { Screen, Card, Txt, Row, Badge, EmptyState, Loading } from "../lib/ui";
+import { colors, space } from "../lib/theme";
+import { naira, kg, shortDate } from "../lib/format";
 
 export default function TripsScreen() {
   const router = useRouter();
-  const [trips, setTrips] = useState<TripSummary[]>([]);
+  const [trips, setTrips] = useState<TripSummary[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const data = await api<{ trips: TripSummary[] }>("/api/mobile/trips");
-      setTrips(data.trips);
-      setError(null);
+      setTrips(data.trips); setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load trips");
+      setTrips((prev) => prev ?? []);
     }
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+  if (trips === null) return <Loading />;
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      contentContainerStyle={{ padding: 16 }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={async () => {
-            setRefreshing(true);
-            await load();
-            setRefreshing(false);
-          }}
-        />
-      }
-    >
+    <Screen refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }}>
       {error && (
-        <Card style={{ marginBottom: 12 }}>
-          <Text style={{ color: colors.destructive }}>{error}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>
-            Weigh-ins recorded offline still queue in Pending sync.
-          </Text>
+        <Card style={{ backgroundColor: colors.warningSoft, borderColor: colors.warningSoft }}>
+          <Txt variant="small" color={colors.warning}>{error} — offline weigh-ins still queue and sync later.</Txt>
         </Card>
       )}
-      {trips.length === 0 && !error && (
-        <Card>
-          <Text style={{ color: colors.muted, textAlign: "center", paddingVertical: 12 }}>
-            No active trips assigned to you. Ops creates trips in the admin.
-          </Text>
-        </Card>
+      {trips.length === 0 ? (
+        <Card><EmptyState icon={<Ionicons name="car-outline" size={32} color={colors.mutedLight} />} title="No active trips" subtitle="You have no trips in the field right now. Operations creates trips in the dashboard." /></Card>
+      ) : (
+        trips.map((t) => (
+          <Card key={t.id} onPress={() => router.push(`/trip/${t.id}` as never)}>
+            <Row justify="space-between">
+              <Txt variant="bodyStrong">{t.locality ?? "Route"}</Txt>
+              <Badge label={t.status.replace(/_/g, " ")} status={t.status} />
+            </Row>
+            <Txt variant="small" color={colors.muted} style={{ marginTop: 2 }}>
+              {shortDate(t.date)}{t.vehicle ? ` · ${t.vehicle}` : ""}
+            </Txt>
+            <Row gap={space.lg} style={{ marginTop: space.sm }}>
+              <Txt variant="small" color={colors.muted}>{t.weighInCount} weigh-ins</Txt>
+              <Txt variant="small" color={colors.muted}>{kg(t.totalKg)}</Txt>
+              <Txt variant="smallStrong" color={colors.accent}>{naira(t.totalAmount)}</Txt>
+            </Row>
+          </Card>
+        ))
       )}
-      {trips.map((t) => (
-        <Pressable
-          key={t.id}
-          onPress={() => router.push(`/trip/${t.id}` as never)}
-          style={({ pressed }) => [styles.trip, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-        >
-          <Text style={styles.tripTitle}>
-            {t.locality ?? "Route"} — {new Date(t.date).toLocaleDateString("en-NG")}
-          </Text>
-          <Text style={styles.tripMeta}>
-            {t.status.replace(/_/g, " ")} · {t.weighInCount} weigh-ins ·{" "}
-            {t.totalKg.toLocaleString()} kg · ₦{t.totalAmount.toLocaleString()}
-          </Text>
-        </Pressable>
-      ))}
-    </ScrollView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  trip: {
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.accent,
-    padding: 16,
-    marginBottom: 10,
-  },
-  tripTitle: { fontSize: 16, fontWeight: "600", color: colors.text },
-  tripMeta: { fontSize: 13, color: colors.muted, marginTop: 2 },
-});
