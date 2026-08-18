@@ -21,11 +21,18 @@ export default function ScaleInScreen() {
   const [stageId, setStageId] = useState<string | null>(null);
   const [weight, setWeight] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
+  const [staffIds, setStaffIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { getProductionSetup().then(setSetup).catch(() => setSetup(null)); }, []);
+  useEffect(() => {
+    getProductionSetup()
+      .then((s) => { setSetup(s); if (s.meStaffId) setStaffIds([s.meStaffId]); })
+      .catch(() => setSetup(null));
+  }, []);
   if (setup === null) return <Loading />;
+
+  const toggleStaff = (id: string) => setStaffIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
 
   const stageName = (id: string) => setup.stages.find((s) => s.id === id)?.name ?? "Stage";
   const input = setup.inputs.find((m) => m.materialId === materialId) ?? null;
@@ -47,12 +54,13 @@ export default function ScaleInScreen() {
     if (!stageId) return setError("Pick the stage.");
     if (!w || w <= 0) return setError("Enter the scale-in reading in kg.");
     if (input && w > input.availableKg + 0.0001) return setError(`Only ${kg(input.availableKg)} available in stock.`);
+    if (staffIds.length === 0) return setError("Assign at least one staff member to the job.");
 
     setBusy(true); setError(null);
     try {
       let scaleInPhotoUrl: string | undefined;
       if (photo) scaleInPhotoUrl = await uploadPhoto(photo);
-      const { id } = await scaleInJob({ siteId: setup.siteId, stageId, materialTypeId: materialId, weightInKg: w, scaleInPhotoUrl });
+      const { id } = await scaleInJob({ siteId: setup.siteId, stageId, materialTypeId: materialId, weightInKg: w, scaleInPhotoUrl, staffIds });
       Alert.alert("Job started", `${kg(w)} scaled in at ${stageName(stageId)}.`);
       router.replace(`/job/${id}` as never);
     } catch (e) {
@@ -113,6 +121,31 @@ export default function ScaleInScreen() {
       <Card>
         <Txt variant="smallStrong" style={{ marginBottom: 6 }}>Scale-in reading (kg)</Txt>
         <Field value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="0.0" style={{ fontSize: 26, fontWeight: "700", textAlign: "center" }} />
+      </Card>
+
+      <Card>
+        <Row justify="space-between" style={{ marginBottom: 8 }}>
+          <Txt variant="smallStrong">Assign staff</Txt>
+          <Txt variant="tiny" color={colors.muted}>{staffIds.length} selected · wage split evenly</Txt>
+        </Row>
+        {setup.assignableStaff.length === 0 ? (
+          <Txt variant="small" color={colors.muted}>No production staff found for this site. Add staff or roles on the web app.</Txt>
+        ) : (
+          <View style={{ gap: space.sm }}>
+            {setup.assignableStaff.map((s) => {
+              const active = staffIds.includes(s.id);
+              return (
+                <Pressable key={s.id} onPress={() => toggleStaff(s.id)} style={{ flexDirection: "row", alignItems: "center", gap: space.sm, borderWidth: 1, borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surface, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: 11 }}>
+                  <Ionicons name={active ? "checkbox" : "square-outline"} size={20} color={active ? colors.accent : colors.mutedLight} />
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="body" color={active ? colors.accentDark : colors.text}>{s.name}{s.id === setup.meStaffId ? " (you)" : ""}</Txt>
+                    {s.title ? <Txt variant="tiny" color={colors.mutedLight}>{s.title}</Txt> : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </Card>
 
       {photo ? (

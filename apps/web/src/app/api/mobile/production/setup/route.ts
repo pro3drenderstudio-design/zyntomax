@@ -15,10 +15,22 @@ export async function GET(request: NextRequest) {
     || (await prisma.site.findFirst({ where: { active: true }, orderBy: { createdAt: "asc" } }))?.id;
   if (!siteId) return NextResponse.json({ error: "No site" }, { status: 404 });
 
-  const [stages, recipes, buckets] = await Promise.all([
+  const [stages, recipes, buckets, staff, me] = await Promise.all([
     prisma.processStage.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     prisma.stageOutput.findMany({ where: { active: true }, include: { outputMaterial: true } }),
     inventoryBuckets([siteId]),
+    // Floor staff who can be assigned to a job at this site.
+    prisma.staffProfile.findMany({
+      where: {
+        user: {
+          status: "ACTIVE",
+          roles: { some: { role: { in: ["PRODUCTION_STAFF", "FACTORY_SUPERVISOR", "TEAM_LEAD"] }, OR: [{ siteId }, { siteId: null }] } },
+        },
+      },
+      include: { user: true },
+      orderBy: { user: { name: "asc" } },
+    }),
+    prisma.staffProfile.findUnique({ where: { userId: session.userId } }),
   ]);
 
   // Available input stock = raw (intake) + intermediates (in-processing pool)
@@ -41,5 +53,7 @@ export async function GET(request: NextRequest) {
     stages: stages.map((s) => ({ id: s.id, name: s.name })),
     inputs,
     outputsByKey,
+    assignableStaff: staff.map((s) => ({ id: s.id, name: s.user.name, title: s.title })),
+    meStaffId: me?.id ?? null,
   });
 }

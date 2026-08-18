@@ -203,6 +203,8 @@ export type ProductionSetup = {
   stages: { id: string; name: string }[];
   inputs: { materialId: string; name: string; kind: string; availableKg: number; stageIds: string[] }[];
   outputsByKey: Record<string, { materialId: string; name: string; kind: string }[]>;
+  assignableStaff: { id: string; name: string; title: string | null }[];
+  meStaffId: string | null;
 };
 
 export async function getJobs(): Promise<{ isSupervisor: boolean; jobs: JobSummary[] }> {
@@ -217,7 +219,7 @@ export async function scaleOutJob(id: string, input: { outputs: { outputMaterial
 export async function getProductionSetup(siteId?: string): Promise<ProductionSetup> {
   return api(`/api/mobile/production/setup${siteId ? `?siteId=${siteId}` : ""}`);
 }
-export async function scaleInJob(input: { siteId: string; stageId: string; materialTypeId: string; weightInKg: number; scaleInPhotoUrl?: string }): Promise<{ id: string }> {
+export async function scaleInJob(input: { siteId: string; stageId: string; materialTypeId: string; weightInKg: number; scaleInPhotoUrl?: string; staffIds?: string[] }): Promise<{ id: string }> {
   return api("/api/mobile/jobs", { method: "POST", json: input });
 }
 
