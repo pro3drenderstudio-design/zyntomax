@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ChunkReload } from "@/components/chunk-reload";
 
 export const metadata: Metadata = {
   title: { default: "Zyntomax", template: "%s · Zyntomax" },
@@ -22,7 +23,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <ChunkReload />
+        {children}
+      </body>
     </html>
   );
 }
