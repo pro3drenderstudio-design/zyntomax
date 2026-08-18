@@ -94,6 +94,30 @@ export async function logout(): Promise<void> {
   await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY, BOOTSTRAP_KEY]);
 }
 
+/**
+ * Re-fetch the current user's roles and rotate the token, so role changes and
+ * account suspension take effect without a manual re-login. Returns the fresh
+ * user, or null when the account is no longer valid (caller should sign out).
+ * On a network blip it keeps the cached session rather than logging out.
+ */
+export async function refreshSession(): Promise<MobileUser | null> {
+  try {
+    const data = await api<{ token: string; user: MobileUser }>("/api/mobile/me");
+    await SecureStore.setItemAsync(TOKEN_KEY, data.token);
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    return data.user;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    // Genuine auth failure (bad/expired token, suspended account) → sign out.
+    if (/Unauthorized|Account inactive/i.test(msg)) {
+      await logout();
+      return null;
+    }
+    // Network or transient error → keep whatever we have cached.
+    return getStoredUser();
+  }
+}
+
 /** Upload a local image (weigh-in photo, scale reading) and return its public URL. */
 export async function uploadPhoto(uri: string): Promise<string> {
   const token = await getToken();

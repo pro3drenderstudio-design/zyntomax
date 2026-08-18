@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { View, Pressable } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getStoredUser } from "../../lib/api";
+import { getStoredUser, refreshSession } from "../../lib/api";
 import { visibleSections, type ModuleItem } from "../../lib/modules";
 import { Screen, Txt, Row, Loading, Badge } from "../../lib/ui";
 import { colors, space, radius } from "../../lib/theme";
@@ -12,9 +12,14 @@ export default function ManageScreen() {
   const [roles, setRoles] = useState<string[] | null>(null);
 
   const load = useCallback(async () => {
-    const u = await getStoredUser();
-    if (!u) { router.replace("/login"); return; }
-    setRoles(u.roles);
+    // Show cached roles instantly, then reconcile with the server so role
+    // changes / suspensions take effect without a manual re-login.
+    const cached = await getStoredUser();
+    if (!cached) { router.replace("/login"); return; }
+    setRoles(cached.roles);
+    const fresh = await refreshSession();
+    if (!fresh) { router.replace("/login"); return; }
+    setRoles(fresh.roles);
   }, [router]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
   if (!roles) return <Loading />;

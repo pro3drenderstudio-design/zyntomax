@@ -9,6 +9,7 @@ import { I18nProvider } from "../lib/i18n";
 import { Txt } from "../lib/ui";
 import { isLockEnabled, authenticate } from "../lib/lock";
 import { registerForPush } from "../lib/push-register";
+import { getToken, refreshSession } from "../lib/api";
 
 function LockGate({ children }: { children: React.ReactNode }) {
   const [locked, setLocked] = useState<boolean | null>(null);
@@ -39,7 +40,12 @@ function LockGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
-  useEffect(() => { registerForPush(); }, []);
+  useEffect(() => {
+    registerForPush();
+    // Reconcile roles/token with the server on launch (best-effort) so access
+    // reflects the latest changes made on the web.
+    (async () => { if (await getToken()) await refreshSession(); })();
+  }, []);
   return (
     <SafeAreaProvider>
       <I18nProvider>
