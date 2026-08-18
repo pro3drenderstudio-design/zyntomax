@@ -3,7 +3,7 @@ import { jwtVerify } from "jose";
 import { COOKIE_NAME } from "@/lib/session";
 
 // /api/mobile and /api/vendor do their own Bearer-token auth
-const PUBLIC_PATHS = ["/login", "/download", "/api/webhooks", "/api/mobile", "/api/vendor"];
+const PUBLIC_PATHS = ["/login", "/download", "/staff-app", "/api/webhooks", "/api/mobile", "/api/vendor"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

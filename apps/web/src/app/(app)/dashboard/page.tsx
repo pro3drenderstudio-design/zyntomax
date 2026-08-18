@@ -106,12 +106,27 @@ export default async function DashboardPage() {
     SALES_NAIRA: "Sales",
   };
 
+  const adminApkUrl = process.env.ZYNTOMAX_ADMIN_APK_URL || "";
+
   return (
     <div>
       <PageHeader
         title="Dashboard"
         subtitle={now.toLocaleDateString("en-NG", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
       />
+
+      {adminApkUrl && (
+        <div className="mb-4 flex flex-col items-start justify-between gap-3 rounded-2xl border border-brand/20 bg-brand/5 p-4 sm:flex-row sm:items-center">
+          <div>
+            <p className="font-semibold text-fg">📱 Zyntomax Admin — the mobile app</p>
+            <p className="text-sm text-muted">Run collections, production, approvals, finance and payroll on the go. Same login, role-gated to what you manage.</p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <a href={adminApkUrl} className="rounded-xl bg-brand px-4 py-2.5 font-semibold text-white no-underline hover:opacity-90">⬇ Download (Android)</a>
+            <Link href="/staff-app" className="rounded-xl border border-border px-4 py-2.5 font-semibold text-fg no-underline hover:bg-muted-bg">Share link</Link>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Active vendors" value={vendorCount} />
