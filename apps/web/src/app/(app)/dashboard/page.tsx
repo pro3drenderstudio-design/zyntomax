@@ -29,6 +29,7 @@ export default async function DashboardPage() {
     monthPurchased,
     monthSales,
     pendingPickups,
+    awaitingScaleIn,
   ] = await Promise.all([
     prisma.vendor.count({ where: { ...siteWhere, status: "ACTIVE" } }),
     prisma.trip.findMany({
@@ -83,6 +84,7 @@ export default async function DashboardPage() {
     prisma.pickupRequest.count({
       where: { status: "PENDING", ...(siteIds ? { vendor: { siteId: { in: siteIds } } } : {}) },
     }),
+    prisma.trip.count({ where: { ...siteWhere, status: "RETURNED" } }),
   ]);
 
   const sumKg = (arr: { kg: number }[]) => arr.reduce((s, m) => s + m.kg, 0);
@@ -202,6 +204,14 @@ export default async function DashboardPage() {
             <h2 className="font-medium">Needs attention</h2>
           </div>
           <ul className="flex flex-col gap-2 text-sm">
+            {awaitingScaleIn > 0 && (
+              <li>
+                <Link href="/trips?status=RETURNED" className="flex items-center justify-between rounded-md bg-warning-soft px-3 py-2 text-warning hover:opacity-90">
+                  <span>{awaitingScaleIn} returned trip{awaitingScaleIn > 1 ? "s" : ""} awaiting factory scale-in</span>
+                  <span aria-hidden>→</span>
+                </Link>
+              </li>
+            )}
             {pendingPickups > 0 && (
               <li>
                 <Link href="/pickups?status=PENDING" className="flex items-center justify-between rounded-md bg-warning-soft px-3 py-2 text-warning hover:opacity-90">
@@ -239,7 +249,7 @@ export default async function DashboardPage() {
                 </Link>
               </li>
             )}
-            {pendingPickups === 0 && flaggedJobs === 0 && pendingBatches.length === 0 && Number(openInvoices._sum.amount ?? 0) === 0 && (
+            {awaitingScaleIn === 0 && pendingPickups === 0 && flaggedJobs === 0 && pendingBatches.length === 0 && Number(openInvoices._sum.amount ?? 0) === 0 && (
               <li className="py-6 text-center text-muted">All clear. Nothing pending.</li>
             )}
           </ul>

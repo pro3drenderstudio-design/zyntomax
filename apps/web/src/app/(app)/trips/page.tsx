@@ -6,12 +6,22 @@ import {
 } from "@/components/ui";
 import { Plus } from "lucide-react";
 
-export default async function TripsPage() {
+const TRIP_STATUSES = ["ALL", "PLANNED", "IN_PROGRESS", "RETURNED", "RECONCILED", "APPROVED", "PAID"] as const;
+
+export default async function TripsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
   const session = await requireSession();
   const siteIds = accessibleSiteIds(session);
+  const { status = "ALL" } = await searchParams;
 
   const trips = await prisma.trip.findMany({
-    where: siteIds ? { siteId: { in: siteIds } } : {},
+    where: {
+      ...(siteIds ? { siteId: { in: siteIds } } : {}),
+      ...(status !== "ALL" ? { status: status as never } : {}),
+    },
     include: {
       locality: true,
       lead: { include: { user: true } },
@@ -34,9 +44,21 @@ export default async function TripsPage() {
         }
       />
 
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {TRIP_STATUSES.map((s) => (
+          <Link
+            key={s}
+            href={s === "ALL" ? "/trips" : `/trips?status=${s}`}
+            className={`rounded-md px-3 py-1.5 text-sm ${status === s ? "bg-accent text-on-primary" : "border border-border hover:bg-muted-bg"}`}
+          >
+            {s === "RETURNED" ? "Awaiting scale-in" : s === "ALL" ? "All" : s.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}
+          </Link>
+        ))}
+      </div>
+
       {trips.length === 0 ? (
         <EmptyState
-          title="No trips yet"
+          title={status === "ALL" ? "No trips yet" : "No trips in this state"}
           hint="Create a collection trip: pick a team lead, locality and date."
           action={<PrimaryLink href="/trips/new">New trip</PrimaryLink>}
         />

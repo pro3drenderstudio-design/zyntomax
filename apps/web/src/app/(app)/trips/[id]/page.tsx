@@ -154,12 +154,13 @@ export default async function TripDetailPage({
         </Card>
       )}
 
-      {/* Reconciliation */}
+      {/* Factory scale-in (reconciliation) */}
       {trip.status === "RETURNED" && canSupervise && byMaterial.size > 0 && (
-        <Card className="mt-4">
-          <h2 className="mb-1 font-medium">Factory reconciliation</h2>
+        <Card className="mt-4 border-accent">
+          <h2 className="mb-1 font-medium">Factory scale-in</h2>
           <p className="mb-3 text-sm text-muted">
-            Scale the truck contents per material. Variance beyond ±{tolerance}% needs a reason.
+            Weigh the truck contents per material as they enter the factory. The remitted weight is what
+            <strong> enters inventory</strong>; any shortfall beyond ±{tolerance}% needs a reason and is logged as waste.
           </p>
           <ReconcileForm
             tripId={trip.id}
