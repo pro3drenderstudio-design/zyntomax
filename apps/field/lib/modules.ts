@@ -39,9 +39,9 @@ export const MODULES: ModuleSection[] = [
   {
     section: "Finance",
     items: [
-      { key: "withdrawals", label: "Withdrawals", icon: "cash-outline", href: "/soon", roles: ["FINANCE_ADMIN"], built: false },
-      { key: "expenses", label: "Expenses", icon: "receipt-outline", href: "/soon", roles: ["FINANCE_ADMIN", "OPERATIONS_MANAGER"], built: false },
-      { key: "reports", label: "Reports", icon: "bar-chart-outline", href: "/soon", roles: ["FINANCE_ADMIN", "OPERATIONS_MANAGER"], built: false },
+      { key: "withdrawals", label: "Withdrawals", icon: "cash-outline", href: "/withdrawals", roles: ["FINANCE_ADMIN"], built: true },
+      { key: "expenses", label: "Expenses", icon: "receipt-outline", href: "/expenses", roles: ["FINANCE_ADMIN", "OPERATIONS_MANAGER"], built: true },
+      { key: "reports", label: "Reports", icon: "bar-chart-outline", href: "/reports", roles: ["FINANCE_ADMIN", "OPERATIONS_MANAGER"], built: true },
     ],
   },
   {

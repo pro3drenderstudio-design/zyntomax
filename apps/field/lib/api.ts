@@ -197,6 +197,46 @@ export async function scaleInJob(input: { siteId: string; stageId: string; mater
   return api("/api/mobile/jobs", { method: "POST", json: input });
 }
 
+/* ── Finance ─────────────────────────────────────────────────────── */
+export type WithdrawalRow = {
+  id: string; vendor: string; phone: string; amount: number; status: string;
+  bankName: string | null; accountLast4: string | null; failureReason: string | null; requestedAt: string;
+};
+export type WithdrawalQueue = { float: number; pendingCount: number; pendingTotal: number; paidTotal: number; withdrawals: WithdrawalRow[] };
+
+export async function getWithdrawals(): Promise<WithdrawalQueue> {
+  return api("/api/mobile/withdrawals");
+}
+export async function approveWithdrawal(id: string): Promise<{ status: string }> {
+  return api(`/api/mobile/withdrawals/${id}/approve`, { method: "POST" });
+}
+export async function rejectWithdrawal(id: string): Promise<{ ok: boolean }> {
+  return api(`/api/mobile/withdrawals/${id}/reject`, { method: "POST" });
+}
+
+export type ExpenseRow = { id: string; amount: number; category: string; site: string; description: string | null; incurredAt: string };
+export type ExpensesData = {
+  monthTotal: number;
+  categories: { id: string; name: string }[];
+  sites: { id: string; name: string }[];
+  expenses: ExpenseRow[];
+};
+
+export async function getExpenses(): Promise<ExpensesData> {
+  return api("/api/mobile/expenses");
+}
+export async function createExpense(input: { siteId: string; categoryId: string; amount: number; description?: string; receiptUrl?: string }): Promise<{ id: string }> {
+  return api("/api/mobile/expenses", { method: "POST", json: input });
+}
+
+export type Pnl = {
+  period: string; revenue: number; vendorCost: number; purchaseCost: number; directExpenses: number;
+  wages: number; opex: number; cogs: number; grossProfit: number; netProfit: number; outputKg: number;
+};
+export async function getReport(month?: string): Promise<Pnl> {
+  return api(`/api/mobile/reports${month ? `?month=${month}` : ""}`);
+}
+
 /** Post the agent's GPS during a trip (best-effort; ignores failures). */
 export async function postLocation(lat: number, lng: number, tripId?: string): Promise<void> {
   try {

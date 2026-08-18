@@ -65,6 +65,10 @@ export default function RootLayout() {
             <Stack.Screen name="jobs" options={{ title: "Production jobs" }} />
             <Stack.Screen name="job/[id]" options={{ title: "Job" }} />
             <Stack.Screen name="job-new" options={{ title: "Scale in", presentation: "modal" }} />
+            <Stack.Screen name="withdrawals" options={{ title: "Withdrawals" }} />
+            <Stack.Screen name="expenses" options={{ title: "Expenses" }} />
+            <Stack.Screen name="expense-new" options={{ title: "Record expense", presentation: "modal" }} />
+            <Stack.Screen name="reports" options={{ title: "P&L report" }} />
             <Stack.Screen name="outbox" options={{ title: "Offline sync" }} />
             <Stack.Screen name="soon" options={{ title: "Coming soon" }} />
           </Stack>
