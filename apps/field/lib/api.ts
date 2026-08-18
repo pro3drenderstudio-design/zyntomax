@@ -164,6 +164,39 @@ export async function getPickups(): Promise<Pickup[]> {
   return data.pickups;
 }
 
+/* ── Production jobs ─────────────────────────────────────────────── */
+export type JobSummary = {
+  id: string; stage: string; inputMaterial: string; weightInKg: number;
+  weightOutKg: number | null; status: string; flagReason: string | null; startedAt: string; assignees: string[];
+};
+export type JobDetail = JobSummary & {
+  wasteKg: number | null; tolerancePct: number; scaleInPhotoUrl: string | null; scaleOutPhotoUrl: string | null;
+  outputs: { materialId: string; name: string; kind: string }[];
+  recorded: { materialId: string; name: string; weightKg: number }[];
+};
+export type ProductionSetup = {
+  siteId: string;
+  stages: { id: string; name: string }[];
+  inputs: { materialId: string; name: string; kind: string; availableKg: number; stageIds: string[] }[];
+  outputsByKey: Record<string, { materialId: string; name: string; kind: string }[]>;
+};
+
+export async function getJobs(): Promise<{ isSupervisor: boolean; jobs: JobSummary[] }> {
+  return api("/api/mobile/jobs");
+}
+export async function getJob(id: string): Promise<JobDetail> {
+  return api(`/api/mobile/jobs/${id}`);
+}
+export async function scaleOutJob(id: string, input: { outputs: { outputMaterialTypeId: string; weightKg: number }[]; wasteKg: number; scaleOutPhotoUrl?: string }): Promise<{ status: string }> {
+  return api(`/api/mobile/jobs/${id}/complete`, { method: "POST", json: input });
+}
+export async function getProductionSetup(siteId?: string): Promise<ProductionSetup> {
+  return api(`/api/mobile/production/setup${siteId ? `?siteId=${siteId}` : ""}`);
+}
+export async function scaleInJob(input: { siteId: string; stageId: string; materialTypeId: string; weightInKg: number; scaleInPhotoUrl?: string }): Promise<{ id: string }> {
+  return api("/api/mobile/jobs", { method: "POST", json: input });
+}
+
 /** Post the agent's GPS during a trip (best-effort; ignores failures). */
 export async function postLocation(lat: number, lng: number, tripId?: string): Promise<void> {
   try {

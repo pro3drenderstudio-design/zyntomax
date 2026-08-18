@@ -32,7 +32,7 @@ export const MODULES: ModuleSection[] = [
   {
     section: "Factory",
     items: [
-      { key: "production", label: "Production Jobs", icon: "hammer-outline", href: "/soon", roles: ["PRODUCTION_STAFF", "FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"], built: false },
+      { key: "production", label: "Production Jobs", icon: "hammer-outline", href: "/jobs", roles: ["PRODUCTION_STAFF", "FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"], built: true },
       { key: "inventory", label: "Inventory", icon: "layers-outline", href: "/soon", roles: ["FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"], built: false },
     ],
   },
