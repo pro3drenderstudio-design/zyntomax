@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
 
 // In development, the API runs on the same machine as Metro — derive its
@@ -67,7 +68,7 @@ const USER_KEY = "zyntomax.user";
 const BOOTSTRAP_KEY = "zyntomax.bootstrap";
 
 export async function getToken(): Promise<string | null> {
-  return AsyncStorage.getItem(TOKEN_KEY);
+  try { return await SecureStore.getItemAsync(TOKEN_KEY); } catch { return AsyncStorage.getItem(TOKEN_KEY); }
 }
 
 export async function getStoredUser(): Promise<MobileUser | null> {
@@ -83,13 +84,34 @@ export async function login(phone: string, password: string): Promise<MobileUser
   });
   const body = await res.json();
   if (!res.ok) throw new Error(body.error ?? "Login failed");
-  await AsyncStorage.setItem(TOKEN_KEY, body.token);
+  await SecureStore.setItemAsync(TOKEN_KEY, body.token);
   await AsyncStorage.setItem(USER_KEY, JSON.stringify(body.user));
   return body.user as MobileUser;
 }
 
 export async function logout(): Promise<void> {
-  await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+  try { await SecureStore.deleteItemAsync(TOKEN_KEY); } catch { /* ignore */ }
+  await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY, BOOTSTRAP_KEY]);
+}
+
+/** Upload a local image (weigh-in photo, scale reading) and return its public URL. */
+export async function uploadPhoto(uri: string): Promise<string> {
+  const token = await getToken();
+  const form = new FormData();
+  const name = uri.split("/").pop() || `photo-${Date.now()}.jpg`;
+  form.append("file", { uri, name, type: "image/jpeg" } as unknown as Blob);
+  const res = await fetch(`${API_URL}/api/mobile/upload`, {
+    method: "POST",
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: form,
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error ?? "Upload failed");
+  return body.url as string;
+}
+
+export async function registerPushToken(token: string): Promise<void> {
+  try { await api("/api/mobile/push-token", { method: "POST", json: { token } }); } catch { /* best-effort */ }
 }
 
 export async function api<T>(
