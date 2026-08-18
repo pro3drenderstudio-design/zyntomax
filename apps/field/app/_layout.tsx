@@ -74,6 +74,12 @@ export default function RootLayout() {
             <Stack.Screen name="payroll" options={{ title: "Payroll" }} />
             <Stack.Screen name="payroll/[id]" options={{ title: "Payroll run" }} />
             <Stack.Screen name="earnings" options={{ title: "My earnings" }} />
+            <Stack.Screen name="inventory" options={{ title: "Inventory" }} />
+            <Stack.Screen name="inventory/[id]" options={{ title: "Material" }} />
+            <Stack.Screen name="sales" options={{ title: "Sales" }} />
+            <Stack.Screen name="sales/[id]" options={{ title: "Sale" }} />
+            <Stack.Screen name="purchases" options={{ title: "Purchases" }} />
+            <Stack.Screen name="purchases/[id]" options={{ title: "Purchase batch" }} />
             <Stack.Screen name="outbox" options={{ title: "Offline sync" }} />
             <Stack.Screen name="soon" options={{ title: "Coming soon" }} />
           </Stack>

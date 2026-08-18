@@ -33,7 +33,14 @@ export const MODULES: ModuleSection[] = [
     section: "Factory",
     items: [
       { key: "production", label: "Production Jobs", icon: "hammer-outline", href: "/jobs", roles: ["PRODUCTION_STAFF", "FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"], built: true },
-      { key: "inventory", label: "Inventory", icon: "layers-outline", href: "/soon", roles: ["FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"], built: false },
+      { key: "inventory", label: "Inventory", icon: "layers-outline", href: "/inventory", roles: ["FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"], built: true },
+    ],
+  },
+  {
+    section: "Trade",
+    items: [
+      { key: "sales", label: "Sales & Invoices", icon: "cart-outline", href: "/sales", roles: ["SALES_ADMIN", "FINANCE_ADMIN", "OPERATIONS_MANAGER"], built: true },
+      { key: "purchases", label: "Purchases", icon: "cube-outline", href: "/purchases", roles: ["PURCHASING_MANAGER", "FINANCE_ADMIN", "FACTORY_SUPERVISOR", "OPERATIONS_MANAGER"], built: true },
     ],
   },
   {

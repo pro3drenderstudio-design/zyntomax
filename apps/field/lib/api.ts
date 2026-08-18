@@ -287,6 +287,60 @@ export async function getMyEarnings(): Promise<MyEarnings> {
   return api("/api/mobile/me/earnings");
 }
 
+/* ── Inventory ───────────────────────────────────────────────────── */
+export type MaterialStock = { materialId: string; name: string; kind: string; color: string | null; kg: number };
+export type StageStock = { stageId: string; stageName: string; materials: MaterialStock[] };
+export type Inventory = {
+  totals: { raw: number; waiting: number; active: number; finished: number };
+  raw: MaterialStock[]; waiting: MaterialStock[]; active: StageStock[]; finished: MaterialStock[];
+};
+export type Movement = { createdAt: string; weightKg: number; from: string | null; to: string | null; by: string | null; note: string | null; refType: string };
+export type MaterialDetail = { material: { id: string; name: string; kind: string; color: string | null }; availableKg: number; movements: Movement[] };
+
+export async function getInventory(): Promise<Inventory> {
+  return api("/api/mobile/inventory");
+}
+export async function getMaterial(id: string): Promise<MaterialDetail> {
+  return api(`/api/mobile/inventory/${id}`);
+}
+
+/* ── Sales (read-only) ───────────────────────────────────────────── */
+export type SaleRow = {
+  id: string; orderNo: string; customer: string; status: string; itemNames: string[]; itemCount: number;
+  total: number; paid: number; outstanding: number; invoiceNo: string | null; invoiceStatus: string; createdAt: string;
+};
+export type SalesData = { aging: { current: number; d1_30: number; d31_60: number; d60plus: number }; outstandingTotal: number; orders: SaleRow[] };
+export type SaleDetail = {
+  id: string; orderNo: string; customer: { name: string; phone: string | null; contactName: string | null };
+  status: string; driverName: string | null; truckNo: string | null; waybillNo: string | null; createdAt: string; total: number;
+  lines: { name: string; isInventory: boolean; qtyKg: number; unitPrice: number; lineTotal: number }[];
+  invoice: { invoiceNo: string; amount: number; paid: number; outstanding: number; dueDate: string; status: string; payments: { amount: number; method: string; reference: string | null; paidAt: string }[] } | null;
+};
+
+export async function getSales(): Promise<SalesData> {
+  return api("/api/mobile/sales");
+}
+export async function getSale(id: string): Promise<SaleDetail> {
+  return api(`/api/mobile/sales/${id}`);
+}
+
+/* ── Purchases (read-only) ───────────────────────────────────────── */
+export type PurchaseRow = { id: string; lotNo: string; supplier: string; scaledIn: boolean; kg: number; materialCost: number; landed: number | null; status: string; createdAt: string };
+export type PurchaseDetail = {
+  id: string; lotNo: string; supplier: { name: string; phone: string | null }; scaledIn: boolean; scaledInAt: string | null;
+  fieldEstKg: number | null; kg: number; variancePct: number | null; materialCost: number; expenseCost: number; landed: number | null;
+  covered: number; outstanding: number; status: string;
+  items: { name: string; weightKg: number; pricePerKg: number; amount: number }[];
+  expenses: { category: string; description: string | null; amount: number; incurredAt: string }[];
+};
+
+export async function getPurchases(): Promise<{ batches: PurchaseRow[] }> {
+  return api("/api/mobile/purchases");
+}
+export async function getPurchase(id: string): Promise<PurchaseDetail> {
+  return api(`/api/mobile/purchases/${id}`);
+}
+
 /** Post the agent's GPS during a trip (best-effort; ignores failures). */
 export async function postLocation(lat: number, lng: number, tripId?: string): Promise<void> {
   try {
