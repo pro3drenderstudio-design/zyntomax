@@ -10,12 +10,13 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const BUCKET = "app-downloads";
 
 async function ensureBucket() {
-  // Idempotent: create the public bucket if it doesn't exist yet.
-  await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ id: BUCKET, name: BUCKET, public: true }),
-  }).catch(() => {});
+  // Public bucket, no MIME restriction, generous per-file limit for APKs.
+  const headers = { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" };
+  const body = JSON.stringify({ id: BUCKET, name: BUCKET, public: true, file_size_limit: 314572800 });
+  // Create (no-op if it already exists) …
+  await fetch(`${SUPABASE_URL}/storage/v1/bucket`, { method: "POST", headers, body }).catch(() => {});
+  // … and update, in case it existed with a smaller (default 50MB) limit.
+  await fetch(`${SUPABASE_URL}/storage/v1/bucket/${BUCKET}`, { method: "PUT", headers, body }).catch(() => {});
 }
 
 /**
