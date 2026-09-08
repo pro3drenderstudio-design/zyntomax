@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const BUCKET = process.env.SUPABASE_UPLOAD_BUCKET ?? "uploads";
+const BUCKET = "app-downloads";
 
 /**
  * Stable, on-domain download links for the mobile apps. Backed by the APKs
@@ -18,6 +18,6 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ app: s
   if (!SUPABASE_URL) {
     return NextResponse.json({ error: "Storage not configured" }, { status: 500 });
   }
-  const target = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/downloads/zyntomax-${app}.apk`;
+  const target = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/zyntomax-${app}.apk`;
   return NextResponse.redirect(target, 307);
 }

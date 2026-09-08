@@ -5,7 +5,18 @@ export const maxDuration = 300;
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const BUCKET = process.env.SUPABASE_UPLOAD_BUCKET ?? "uploads";
+// Dedicated public bucket with no MIME restriction (the image uploads bucket
+// only allows image/* and rejects APKs).
+const BUCKET = "app-downloads";
+
+async function ensureBucket() {
+  // Idempotent: create the public bucket if it doesn't exist yet.
+  await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ id: BUCKET, name: BUCKET, public: true }),
+  }).catch(() => {});
+}
 
 /**
  * Copy a built APK into Supabase Storage at a stable key so the public download
@@ -31,7 +42,8 @@ export async function POST(request: NextRequest) {
   if (!srcRes.ok) return NextResponse.json({ error: `Source fetch failed (${srcRes.status})` }, { status: 502 });
   const bytes = Buffer.from(await srcRes.arrayBuffer());
 
-  const key = `downloads/zyntomax-${app}.apk`;
+  await ensureBucket();
+  const key = `zyntomax-${app}.apk`;
   const up = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${key}`, {
     method: "POST",
     headers: {
