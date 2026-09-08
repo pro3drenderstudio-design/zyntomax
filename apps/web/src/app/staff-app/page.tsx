@@ -26,7 +26,9 @@ const STEPS = [
 ];
 
 export default function StaffAppPage() {
-  const APK_URL = process.env.ZYNTOMAX_ADMIN_APK_URL || "";
+  // Stable, on-domain link backed by the APK mirrored into Supabase Storage —
+  // never expires the way raw EAS artifact URLs do.
+  const APK_URL = "/downloads/admin";
   return (
     <main style={{ background: "#0b3d24", minHeight: "100vh", color: "#fff", fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
       {/* Hero */}

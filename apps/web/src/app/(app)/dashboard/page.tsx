@@ -106,7 +106,7 @@ export default async function DashboardPage() {
     SALES_NAIRA: "Sales",
   };
 
-  const adminApkUrl = process.env.ZYNTOMAX_ADMIN_APK_URL || "";
+  const adminApkUrl = "/downloads/admin";
 
   return (
     <div>
