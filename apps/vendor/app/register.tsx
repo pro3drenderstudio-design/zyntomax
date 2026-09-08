@@ -48,11 +48,10 @@ export default function RegisterScreen() {
   async function submit() {
     if (name.trim().length < 2) return setError("Enter your full name.");
     if (!/^0\d{10}$/.test(phone.trim())) return setError("Enter your 11-digit phone number.");
-    if (!photo) return setError("Please add your photo.");
     setBusy(true); setError(null);
     try {
       await registerVendor({
-        name: name.trim(), phone: phone.trim(), photoUri: photo, address: address.trim() || undefined,
+        name: name.trim(), phone: phone.trim(), photoUri: photo ?? undefined, address: address.trim() || undefined,
         lat: coords?.lat, lng: coords?.lng, referredByCode: ref.trim() || undefined,
       });
       Alert.alert("Registration submitted", "Your account is awaiting approval. We'll notify you and you can sign in once it's approved.", [
@@ -78,7 +77,7 @@ export default function RegisterScreen() {
             </View>
           )}
         </Pressable>
-        <Pressable onPress={takePhoto}><Txt variant="smallStrong" color={colors.accent}>{photo ? "Retake photo" : "Take your photo"}</Txt></Pressable>
+        <Pressable onPress={takePhoto}><Txt variant="smallStrong" color={colors.accent}>{photo ? "Retake photo" : "Take your photo (optional)"}</Txt></Pressable>
       </View>
 
       <Card>
