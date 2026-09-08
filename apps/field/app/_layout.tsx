@@ -65,6 +65,8 @@ export default function RootLayout() {
             <Stack.Screen name="trips" options={{ title: "My trips" }} />
             <Stack.Screen name="trip/[id]" options={{ title: "Weigh-in" }} />
             <Stack.Screen name="vendors" options={{ title: "Vendors" }} />
+            <Stack.Screen name="vendor/[id]" options={{ title: "Vendor" }} />
+            <Stack.Screen name="vendor/[id]/edit" options={{ title: "Edit vendor", presentation: "modal" }} />
             <Stack.Screen name="vendor-new" options={{ title: "Register vendor", presentation: "modal" }} />
             <Stack.Screen name="pickups" options={{ title: "Pickup requests" }} />
             <Stack.Screen name="admin" options={{ title: "Operations" }} />

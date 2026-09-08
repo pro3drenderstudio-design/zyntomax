@@ -367,6 +367,52 @@ export async function getPurchase(id: string): Promise<PurchaseDetail> {
   return api(`/api/mobile/purchases/${id}`);
 }
 
+/* ── Vendor management ───────────────────────────────────────────── */
+export type VendorListItem = {
+  id: string; vendorNo: string | null; name: string; nickname: string | null; phone: string;
+  photoUrl: string | null; locality: string | null; status: string; bankVerified: boolean;
+  lat: number | null; lng: number | null; lifetimeKg: number;
+};
+export type VendorList = { total: number; pendingCount: number; page: number; hasMore: boolean; vendors: VendorListItem[] };
+export type VendorWallet = { earned: number; paidOut: number; withdrawn: number; available: number };
+export type VendorDetail = {
+  id: string; vendorNo: string | null; name: string; nickname: string | null; phone: string;
+  photoUrl: string | null; address: string | null; status: string; locality: string | null; localityId: string | null;
+  lat: number | null; lng: number | null; bankName: string | null; bankAccountNo: string | null;
+  bankAccountName: string | null; bankVerified: boolean; referralCode: string | null; createdAt: string;
+  wallet: VendorWallet; lifetimeKg: number;
+  weighIns: { id: string; createdAt: string; material: string; weightKg: number; ratePerKg: number; amount: number; confirmation: string }[];
+  withdrawals: { id: string; amount: number; status: string; requestedAt: string; failureReason: string | null }[];
+  payouts: { id: string; amount: number; status: string; paystackRef: string | null; createdAt: string }[];
+};
+
+export async function getVendors(opts?: { status?: string; q?: string; page?: number }): Promise<VendorList> {
+  const p = new URLSearchParams();
+  if (opts?.status) p.set("status", opts.status);
+  if (opts?.q) p.set("q", opts.q);
+  if (opts?.page) p.set("page", String(opts.page));
+  const qs = p.toString();
+  return api(`/api/mobile/vendors${qs ? `?${qs}` : ""}`);
+}
+export async function getVendor(id: string): Promise<VendorDetail> {
+  return api(`/api/mobile/vendors/${id}`);
+}
+export async function approveVendor(id: string): Promise<{ ok: boolean }> {
+  return api(`/api/mobile/vendors/${id}/approve`, { method: "POST" });
+}
+export async function rejectVendor(id: string): Promise<{ ok: boolean }> {
+  return api(`/api/mobile/vendors/${id}/reject`, { method: "POST" });
+}
+export async function setVendorStatus(id: string, status: "ACTIVE" | "INACTIVE" | "BLACKLISTED"): Promise<{ status: string }> {
+  return api(`/api/mobile/vendors/${id}/status`, { method: "POST", json: { status } });
+}
+export async function updateVendor(id: string, input: { name: string; nickname?: string; phone: string; address?: string; localityId?: string | null; bankCode?: string | null; bankName?: string | null; bankAccountNo?: string | null }): Promise<{ ok: boolean }> {
+  return api(`/api/mobile/vendors/${id}`, { method: "PATCH", json: input });
+}
+export async function deleteVendor(id: string): Promise<{ ok: boolean; softDeleted: boolean }> {
+  return api(`/api/mobile/vendors/${id}`, { method: "DELETE" });
+}
+
 /** Post the agent's GPS during a trip (best-effort; ignores failures). */
 export async function postLocation(lat: number, lng: number, tripId?: string): Promise<void> {
   try {

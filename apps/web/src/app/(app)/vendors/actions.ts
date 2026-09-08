@@ -6,33 +6,22 @@ import { prisma } from "@zyntomax/db";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { createTransferRecipient, resolveAccount } from "@/lib/paystack";
 import { nextVendorNo } from "@/lib/ids";
-import { sendSms } from "@/lib/sms";
-import { sendExpoPush } from "@/lib/push";
+import {
+  verifyBank, approveVendorById, rejectVendorById, setVendorStatusById, deleteVendorById,
+} from "@/lib/vendors";
 
 /** Approve a self-registered (PENDING) vendor. */
 export async function approveVendor(vendorId: string): Promise<void> {
   const session = await requireRole(["OPERATIONS_MANAGER", "HR_ADMIN"]);
-  const v = await prisma.vendor.findUniqueOrThrow({ where: { id: vendorId } });
-  if (v.status !== "PENDING") return;
-  await prisma.vendor.update({
-    where: { id: vendorId },
-    data: { status: "ACTIVE", vendorNo: v.vendorNo ?? (await nextVendorNo()) },
-  });
-  await sendSms({ to: v.phone, vendorId, body: "Zyntomax: your account has been approved! Open the app and sign in to start recycling." });
-  await sendExpoPush(v.pushToken, "Account approved ✅", "You can now sign in and start requesting pickups.");
-  await audit({ actorId: session.userId, action: "vendor.approve", entity: "Vendor", entityId: vendorId });
+  await approveVendorById(vendorId, session.userId);
   revalidatePath("/vendors");
 }
 
 /** Reject a self-registered (PENDING) vendor. */
 export async function rejectVendor(vendorId: string): Promise<void> {
   const session = await requireRole(["OPERATIONS_MANAGER", "HR_ADMIN"]);
-  const v = await prisma.vendor.findUniqueOrThrow({ where: { id: vendorId } });
-  if (v.status !== "PENDING") return;
-  await prisma.vendor.delete({ where: { id: vendorId } });
-  await audit({ actorId: session.userId, action: "vendor.reject", entity: "Vendor", entityId: vendorId, before: { name: v.name, phone: v.phone } });
+  await rejectVendorById(vendorId, session.userId);
   revalidatePath("/vendors");
 }
 
@@ -52,23 +41,6 @@ const vendorSchema = z.object({
 });
 
 export type VendorFormState = { error?: string };
-
-async function verifyBank(bankAccountNo?: string, bankCode?: string) {
-  if (!bankAccountNo || !bankCode) {
-    return { bankAccountName: undefined, bankVerified: false, paystackRecipient: undefined };
-  }
-  const resolved = await resolveAccount(bankAccountNo, bankCode);
-  const recipient = await createTransferRecipient({
-    name: resolved.account_name,
-    accountNumber: bankAccountNo,
-    bankCode,
-  });
-  return {
-    bankAccountName: resolved.account_name,
-    bankVerified: true,
-    paystackRecipient: recipient.recipient_code,
-  };
-}
 
 export async function createVendor(
   _prev: VendorFormState,
@@ -217,46 +189,14 @@ export async function setVendorStatus(
   status: "ACTIVE" | "INACTIVE" | "BLACKLISTED",
 ) {
   const session = await requireRole(["OPERATIONS_MANAGER"]);
-  const before = await prisma.vendor.findUniqueOrThrow({ where: { id: vendorId } });
-  await prisma.vendor.update({ where: { id: vendorId }, data: { status } });
-  await audit({
-    actorId: session.userId,
-    action: "vendor.status",
-    entity: "Vendor",
-    entityId: vendorId,
-    before: { status: before.status },
-    after: { status },
-  });
+  await setVendorStatusById(vendorId, status, session.userId);
   revalidatePath(`/vendors/${vendorId}`);
   revalidatePath("/vendors");
 }
 
 export async function deleteVendor(vendorId: string) {
   const session = await requireRole(["OPERATIONS_MANAGER"]);
-
-  // A vendor with collection history must not be hard-deleted (it would orphan
-  // ledger and payout records). Blacklist instead; only delete if never used.
-  const weighIns = await prisma.collectionWeighIn.count({ where: { vendorId } });
-  if (weighIns > 0) {
-    await prisma.vendor.update({ where: { id: vendorId }, data: { status: "BLACKLISTED" } });
-    await audit({
-      actorId: session.userId,
-      action: "vendor.soft_delete",
-      entity: "Vendor",
-      entityId: vendorId,
-    });
-    revalidatePath("/vendors");
-    redirect("/vendors");
-  }
-
-  await prisma.pickupRequest.deleteMany({ where: { vendorId } });
-  await prisma.vendor.delete({ where: { id: vendorId } });
-  await audit({
-    actorId: session.userId,
-    action: "vendor.delete",
-    entity: "Vendor",
-    entityId: vendorId,
-  });
+  await deleteVendorById(vendorId, session.userId);
   revalidatePath("/vendors");
   redirect("/vendors");
 }
